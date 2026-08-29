@@ -85,6 +85,13 @@
           images = pkgs.runCommand "cloud-images" { } ''
             printf '%s\n' "${toString (builtins.attrNames exampleFlake.images)}" > "$out"
           '';
+          rolefilter = pkgs.runCommand "cloud-rolefilter" { } ''
+            if [ -n "${exampleHost.config.environment.variables.CLOUD_SERVER or ""}" ]; then
+              echo "server 角色模块应被过滤掉，但未" >&2
+              exit 1
+            fi
+            printf '%s\n' "${exampleHost.config.environment.variables.CLOUD_EXAMPLE}" > "$out"
+          '';
         };
 
       checks = lib.genAttrs systems checksFor;

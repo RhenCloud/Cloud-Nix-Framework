@@ -170,7 +170,7 @@ cloud.mkHome {
 
 - **NixOS 主机**：从 `hosts/<name>.<system>/` 后缀直接得到 `system`，无需探测。
 - **per-host home**（`"<user>@<host>"`）：`system` 继承对应主机的 `.<system>` 后缀。
-- **全局 home**（仅 `homeConfigurations.<user>`，无 host）：`system` 由 `mkHome { system = ...; }` 显式提供；`mkFlake` 生成时默认取 `systems` 的首项。不再通过读取 `default.nix` 内 `cloud.system` 做两遍探测。
+- **全局 home**（仅 `homeConfigurations.<user>`，无 host）：`system` 由 `mkHome { system = ...; }` 显式提供；`mkFlake` 生成时默认取 `systems` 的首项。框架不再依赖已废弃的 `cloud.system` 选项（当前不提供），故无需两遍探测。
 
 ### 镜像生成
 
@@ -199,7 +199,28 @@ outputs = { self, nixpkgs, cloudModules, ... }:
   };
 ```
 
-远程注册表复用与本地相同的 `groupModules` 分拣结构（`nixos` / `home` 双侧），框架自动并入 `autoModules`。
+ 远程注册表复用与本地相同的 `groupModules` 分拣结构（`nixos` / `home` 双侧），框架自动并入 `autoModules`。
+
+### 角色过滤（opt-in）
+
+`cloud.role` 是每主机选项（`nullOr str`，默认 `null`）。当主机在其 `hosts/<name>.<system>/default.nix` 内声明 `config.cloud.role = "desktop"` 时，框架只对这台主机注入 `modules/desktop/` 下的 `nixos.nix`/`home.nix`；其余角色的 config 模块在求值期即被筛除，无需依靠 `mkIf` 守卫兜底。约定：
+
+- `modules/<role>/.../nixos.nix`（或 `home.nix`）：仅当主机 `cloud.role == <role>` 时注入。
+- `modules/.../default.nix`（option 接口）：**始终注入**，与角色无关——保证 `options.cloud.*` 全主机可见，`mkIf config.cloud.<x>.enable` 仍可用。
+- `cloud.role` 为 `null`（缺省）时全部 config 模块照旧全量注入，向后兼容。
+
+角色值在求值前从主机 `default.nix` 的 `config.cloud.role` 字面量 best-effort 读取；若主机模块以函数形式消费 `config` 参数，框架无法静态判定角色，回退为全量注入。
+
+### 额外模块钩子（extraModules）
+
+`mkFlake` 接受 `extraModules`（模块路径 / 属性集列表），追加进**每台主机与每个 home** 的最终模块列表；`mkSystem` / `mkHome` 也各自接受 per-host 的 `extraModules`。它是对「魔术目录 + 模块注册表」的补充，便于不新建 flake、不调整目录结构就挂入外部模块：
+
+```nix
+cloud.mkFlake {
+  inherit inputs;
+  extraModules = [ ./overrides/theme.nix ];
+}
+```
 
 ### 开发体验
 

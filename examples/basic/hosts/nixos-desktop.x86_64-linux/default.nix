@@ -3,7 +3,11 @@
   ...
 }:
 {
-  system.stateVersion = "25.05";
+  config = {
+    system.stateVersion = "25.05";
 
-  environment.systemPackages = [ pkgs.hello ];
+    cloud.role = "desktop";
+
+    environment.systemPackages = [ pkgs.hello ];
+  };
 }

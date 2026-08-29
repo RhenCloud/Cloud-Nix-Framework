@@ -56,6 +56,11 @@ let
           type = lib.types.listOf lib.types.str;
           default = [ ];
         };
+        role = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "主机角色；非空时框架仅注入 modules/<role>/ 下的 nixos.nix/home.nix（default.nix 始终注入），据此替代全量注入 + mkIf 守卫";
+        };
         images = lib.mkOption {
           type = lib.types.submodule {
             options.formats = lib.mkOption {
@@ -118,6 +123,8 @@ let
           };
         in
         {
+          inherit localAutoModules registryModules;
+
           hosts = map (
             e:
             let
@@ -239,6 +246,50 @@ let
         else
           lib.head matches;
 
+      roleFor =
+        host:
+        let
+          hostRec = resolveHost host;
+          modPath = root + "/hosts/" + hostRec.dir + "/default.nix";
+          hostArgs = {
+            inherit lib self inputs;
+            pkgs = null;
+            config = null;
+            options = null;
+            modules = null;
+            name = null;
+          };
+          attempt = builtins.tryEval (
+            let
+              imported = import modPath hostArgs;
+              mod = if builtins.isFunction imported then imported hostArgs else imported;
+              config = if builtins.isAttrs mod && mod ? config then mod.config else { };
+            in
+            if builtins.isFunction config then
+              null
+            else if config ? cloud && config.cloud ? role then
+              config.cloud.role
+            else
+              null
+          );
+        in
+        if attempt.success then attempt.value else null;
+
+      relUnderModules = p: lib.removePrefix (root + "/modules/") p;
+      roleOfPath = p: lib.head (lib.splitString "/" (relUnderModules p));
+      isDefaultFile = p: baseNameOf p == "default.nix";
+      filterRole =
+        role: paths:
+        lib.filter (
+          p:
+          if isDefaultFile p then
+            true
+          else if role == null then
+            true
+          else
+            (roleOfPath p) == role
+        ) paths;
+
       specialArgsFor =
         extraSpecialArgs:
         {
@@ -259,6 +310,7 @@ let
           host ? null,
         }:
         let
+          role = if host == null then null else roleFor host;
           ownDefault = lib.filter builtins.pathExists [ (root + "/homes/" + user + "/default.nix") ];
           ownHost =
             if host == null then
@@ -266,7 +318,10 @@ let
             else
               lib.filter builtins.pathExists [ (root + "/homes/" + user + "/" + host + ".nix") ];
         in
-        discovered.autoModules.home ++ ownDefault ++ ownHost;
+        filterRole role discovered.localAutoModules.home
+        ++ discovered.registryModules.home
+        ++ ownDefault
+        ++ ownHost;
 
       callPackage =
         pkgs: path:
@@ -284,6 +339,7 @@ let
           host,
           system ? null,
           modules ? [ ],
+          extraModules ? [ ],
           extraSpecialArgs ? { },
         }:
         let
@@ -292,8 +348,13 @@ let
           hostModule = root + "/hosts/" + hostRecord.dir + "/default.nix";
           specialArgs = specialArgsFor extraSpecialArgs;
           users = usersForHost host;
+          role = roleFor host;
 
-          hostModules = builtins.filter builtins.pathExists (discovered.autoModules.nixos ++ [ hostModule ]);
+          hostModules = builtins.filter builtins.pathExists (
+            filterRole role discovered.localAutoModules.nixos
+            ++ discovered.registryModules.nixos
+            ++ [ hostModule ]
+          );
 
           overlays = lib.listToAttrs (
             map (o: lib.nameValuePair o.name (import o.path { inherit cloud; })) discovered.overlays
@@ -344,7 +405,8 @@ let
           ++ lib.optionals (discovered.overlays != [ ]) [ overlaysModule ]
           ++ lib.optionals (users != [ ]) [ embedModule ]
           ++ hostModules
-          ++ modules;
+          ++ modules
+          ++ extraModules;
         in
         nixosSystem {
           system = sys;
@@ -358,6 +420,7 @@ let
           host ? null,
           system ? null,
           modules ? [ ],
+          extraModules ? [ ],
           extraSpecialArgs ? { },
         }:
         let
@@ -375,7 +438,7 @@ let
         hmLib.homeManagerConfiguration {
           inherit pkgs;
           extraSpecialArgs = specialArgsFor extraSpecialArgs;
-          modules = [ optionsCloud ] ++ homeModulesFor { inherit user host; } ++ modules;
+          modules = [ optionsCloud ] ++ homeModulesFor { inherit user host; } ++ modules ++ extraModules;
         };
 
       mkFlake =
@@ -383,6 +446,8 @@ let
           systems ? defaultSystems,
           extraOutputs ? { },
           extraSpecialArgs ? { },
+          extraModules ? [ ],
+          ...
         }:
         let
           nixosConfigurations = lib.listToAttrs (
@@ -391,7 +456,7 @@ let
               lib.nameValuePair h.name (mkSystem {
                 host = h.name;
                 inherit (h) system;
-                inherit extraSpecialArgs;
+                inherit extraSpecialArgs extraModules;
               })
             ) discovered.hosts
           );
@@ -461,7 +526,7 @@ let
                     lib.nameValuePair h.user (mkHome {
                       inherit (h) user;
                       system = lib.head systems;
-                      inherit extraSpecialArgs;
+                      inherit extraSpecialArgs extraModules;
                     })
                   )
                   (lib.filter (h: builtins.pathExists (root + "/homes/" + h.user + "/default.nix")) discovered.homes)
@@ -474,7 +539,7 @@ let
                       host:
                       lib.nameValuePair "${h.user}@${host}" (mkHome {
                         inherit (h) user;
-                        inherit host extraSpecialArgs;
+                        inherit host extraSpecialArgs extraModules;
                       })
                     )
                     (
