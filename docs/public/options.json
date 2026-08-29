@@ -1,0 +1,1 @@
+{"example":{"message":{"default":"\"hello\"","description":null,"type":"str"}},"images":{"default":"{}","description":"镜像生成配置，由框架映射为 `images.<host>.<format>` 输出","type":"submodule"},"users":{"default":"[]","description":null,"type":"listOf"}}
