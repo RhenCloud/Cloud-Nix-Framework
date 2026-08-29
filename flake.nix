@@ -56,6 +56,13 @@
           exampleDevshell = exampleFlake.devShells.${sys}.default;
           exampleOverlay = exampleFlake.overlays.example;
           exampleLib = exampleFlake.lib.example.shout;
+          exampleBasicReal = (import ./examples/basic/flake.nix).outputs {
+            self = {
+              outPath = ./examples/basic;
+            };
+            inherit nixpkgs home-manager;
+            cloud = self;
+          };
         in
         {
           surface = pkgs.runCommand "cloud-surface" { } ''
@@ -90,7 +97,18 @@
               echo "server 角色模块应被过滤掉，但未" >&2
               exit 1
             fi
+            if [ -z "${exampleHost.config.environment.variables.CLOUD_COMMON or ""}" ]; then
+              echo "_common 共享模块应始终注入，但未" >&2
+              exit 1
+            fi
             printf '%s\n' "${exampleHost.config.environment.variables.CLOUD_EXAMPLE}" > "$out"
+          '';
+          examplereal = pkgs.runCommand "cloud-example-real" { } ''
+            if [ -z "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" ]; then
+              echo "examples/basic 入口错误：未生成 nixosConfigurations（应为 inputs.cloud.lib.mkFlake）" >&2
+              exit 1
+            fi
+            printf '%s\n' "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" > "$out"
           '';
         };
 

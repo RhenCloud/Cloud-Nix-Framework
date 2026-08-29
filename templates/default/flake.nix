@@ -16,5 +16,5 @@
     };
   };
 
-  outputs = inputs: inputs.cloud.mkFlake { inherit inputs; };
+  outputs = inputs: inputs.cloud.lib.mkFlake { inherit inputs; };
 }

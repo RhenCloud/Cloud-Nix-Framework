@@ -183,7 +183,7 @@ cloud.mkHome {
 }
 ```
 
-可用变体即 `image.modules` 中的键（iso / raw / raw-efi / qemu / qemu-efi / oci / amazon / azure / vmware / virtualbox …），详见 `nixos-rebuild build-image` 列表。若声明的变体在当期 nixpkgs 不存在，框架在求值期抛出明确错误。
+可用变体即 `image.modules` 中的键（iso / raw / raw-efi / qemu / qemu-efi / oci / amazon / azure / vmware / virtualbox …），详见 `nixos-rebuild build-image` 列表。若声明的变体在当期 nixpkgs 不存在，框架在求值期抛出明确错误。`cloud.images` 选项只注入 NixOS 主机，不进入 home-manager 配置。
 
 ### 模块注册表（opt-in）
 
@@ -203,24 +203,50 @@ outputs = { self, nixpkgs, cloudModules, ... }:
 
 ### 角色过滤（opt-in）
 
-`cloud.role` 是每主机选项（`nullOr str`，默认 `null`）。当主机在其 `hosts/<name>.<system>/default.nix` 内声明 `config.cloud.role = "desktop"` 时，框架只对这台主机注入 `modules/desktop/` 下的 `nixos.nix`/`home.nix`；其余角色的 config 模块在求值期即被筛除，无需依靠 `mkIf` 守卫兜底。约定：
+主机可在 `hosts/<name>.<system>/default.nix` **顶层**声明 `role = "desktop"`（**顶层字段，不在 `config` 内**；框架在把该模块交给 NixOS 前会剥离 `role`，故不会触发「未知模块属性」报错）。当主机声明 `role` 时，框架只对这台主机注入 `modules/<role>/` 下的 `nixos.nix`/`home.nix`，其余角色的 config 模块在求值期即被筛除，无需 `mkIf` 守卫兜底：
 
-- `modules/<role>/.../nixos.nix`（或 `home.nix`）：仅当主机 `cloud.role == <role>` 时注入。
+```nix
+# hosts/nixos-desktop.x86_64-linux/default.nix
+{ config, ... }: {
+  role = "desktop";
+  config = { /* ... */ };
+}
+```
+
+- `modules/<role>/.../nixos.nix`（或 `home.nix`）：仅当主机 `role == <role>` 时注入。
+- `modules/_common/...`（下划线前缀）：**始终注入**，是「共享但单端」模块的归属地（如通用 boot / networking 的 `nixos.nix`），无需塞进 `default.nix` 造成泄漏到 home-manager。
 - `modules/.../default.nix`（option 接口）：**始终注入**，与角色无关——保证 `options.cloud.*` 全主机可见，`mkIf config.cloud.<x>.enable` 仍可用。
-- `cloud.role` 为 `null`（缺省）时全部 config 模块照旧全量注入，向后兼容。
+- 未声明 `role` 时全部 config 模块照旧全量注入，向后兼容。
 
-角色值在求值前从主机 `default.nix` 的 `config.cloud.role` 字面量 best-effort 读取；若主机模块以函数形式消费 `config` 参数，框架无法静态判定角色，回退为全量注入。
+角色值在求值前从主机模块的顶层 `role` 字段 best-effort 读取（函数式主机模块会以真实 pkgs 调用再读字面量）；若无法静态判定（如 `role` 被 `mkIf`/`mkMerge` 包裹），回退为全量注入。
 
-### 额外模块钩子（extraModules）
+### 额外模块钩子（extraModules / extraNixosModules / extraHomeModules）
 
-`mkFlake` 接受 `extraModules`（模块路径 / 属性集列表），追加进**每台主机与每个 home** 的最终模块列表；`mkSystem` / `mkHome` 也各自接受 per-host 的 `extraModules`。它是对「魔术目录 + 模块注册表」的补充，便于不新建 flake、不调整目录结构就挂入外部模块：
+`mkFlake` 接受三组模块列表，是对「魔术目录 + 模块注册表」的补充，便于不新建 flake、不调整目录结构就挂入外部模块：
+
+- `extraModules`：同时追加进**每台主机与每个 home** 的最终模块列表；
+- `extraNixosModules`：仅追加进 NixOS 主机；
+- `extraHomeModules`：仅追加进 home-manager home。
+
+`mkSystem` 接受 `extraModules` / `extraNixosModules`；`mkHome` 接受 `extraModules` / `extraHomeModules`。分端参数可避免把 sops-nix 这类纯 NixOS 模块误注入 home 导致报错：
 
 ```nix
 cloud.mkFlake {
   inherit inputs;
-  extraModules = [ ./overrides/theme.nix ];
+  extraNixosModules = [ ./overrides/nixos.nix ];
+  extraHomeModules = [ ./overrides/home.nix ];
+  extraModules = [ ./overrides/shared.nix ];
 }
 ```
+
+### 模块输出（nixosModules / homeModules）
+
+`mkFlake` 额外暴露两个顶层输出，供其它 flake 复用本仓库自动发现的模块：
+
+- `nixosModules.<名>`：`modules/**` 下 NixOS 侧模块（`default.nix` + `nixos.nix`），键为相对路径点分（如 `desktop.hyprland`）。
+- `homeModules.<名>`：home-manager 侧模块（`default.nix` + `home.nix`）。
+
+模块目录若发生重名（不同路径映射到同一模块名），框架在求值期抛错，避免静默合并。
 
 ### 开发体验
 

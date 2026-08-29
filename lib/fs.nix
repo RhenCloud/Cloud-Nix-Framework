@@ -69,14 +69,21 @@ let
         nameOf = folder: lib.strings.replaceStrings [ "/" ] [ "." ] folder;
         group =
           pred:
-          lib.listToAttrs (
-            map (
-              folder:
-              lib.nameValuePair (nameOf folder) (
-                map (f: f.path) (lib.filter (f: folderOf f == folder && pred f.base) relevant)
-              )
-            ) (lib.unique (map folderOf relevant))
-          );
+          let
+            matched = lib.filter (f: pred f.base) relevant;
+            folders = lib.unique (map folderOf matched);
+            names = map nameOf folders;
+            dups = lib.subtractLists (lib.unique names) names;
+          in
+          if dups != [ ] then
+            throw "modules 下发现重名模块目录：${lib.concatStringsSep ", " dups}（不同路径映射到同一模块名，请重命名以避免冲突）"
+          else
+            lib.listToAttrs (
+              map (
+                folder:
+                lib.nameValuePair (nameOf folder) (map (f: f.path) (lib.filter (f: folderOf f == folder) matched))
+              ) folders
+            );
       in
       {
         nixos = group (b: b == "default.nix" || b == "nixos.nix");
