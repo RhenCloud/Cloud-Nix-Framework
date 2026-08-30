@@ -1,5 +1,14 @@
 { lib }:
 
+# Cloud Nix Framework - 库入口
+# 结构：
+#   ./discover.nix  - 目录自动发现
+#   ./host.nix      - 主机元数据
+#   ./sops.nix      - SOPS 密钥管理
+#   ./patches.nix   - Patch 帮助函数
+#   ./fs.nix        - 文件系统遍历
+#   ./internal/     - 框架内部模块
+
 let
   fs = import ./fs.nix { inherit lib; };
   patches = import ./patches.nix;
