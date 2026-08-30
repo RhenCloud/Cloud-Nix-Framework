@@ -78,7 +78,7 @@ outputs = inputs:
     "development"
   ];
 
-  homeManager.useGlobalPkgs = false;
+  home.useGlobalPkgs = false;
 }
 ```
 
