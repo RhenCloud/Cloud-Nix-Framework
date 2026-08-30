@@ -23,6 +23,7 @@ export default defineConfig({
             { text: '目录结构', link: '/guide/directory-structure' },
             { text: '模块写作', link: '/guide/modules' },
             { text: 'Overlays 与补丁', link: '/guide/overlays-patches' },
+            { text: '扩展 outputs', link: '/guide/extensions' },
             { text: '密钥管理', link: '/guide/sops' }
           ]
         }

@@ -36,8 +36,39 @@
           outPath = ./examples/basic;
         };
       };
+      exampleBound = cloud.mkLib { inputs = exampleInputs; };
       exampleFlake = cloud.mkFlake {
         inputs = exampleInputs;
+        root = ./examples/basic;
+        extraSpecialArgs.cloudTestArg = "injected";
+        nixpkgsConfig.allowUnfree = true;
+        extraOverlays = [
+          (final: _: {
+            cloud-extra-marker = final.writeText "cloud-extra-marker" "ok";
+          })
+        ];
+        extraHomeModules = [
+          (
+            {
+              cloudTestArg,
+              pkgs,
+              ...
+            }:
+            {
+              home.sessionVariables = {
+                CLOUD_SPECIAL_ARG = cloudTestArg;
+                CLOUD_DISCOVERED_OVERLAY = if pkgs ? cloud-example then "yes" else "no";
+                CLOUD_EXTRA_OVERLAY = if pkgs ? cloud-extra-marker then "yes" else "no";
+                CLOUD_ALLOW_UNFREE = if pkgs.config.allowUnfree then "yes" else "no";
+              };
+            }
+          )
+        ];
+      };
+      exampleFlakeNoEmbed = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        embedHomeManager = false;
       };
 
       systems = [
@@ -53,9 +84,22 @@
           exampleHome = exampleFlake.homeConfigurations."rhencloud@nixos-desktop";
           exampleHomeGlobal = exampleFlake.homeConfigurations.rhencloud;
           examplePkg = exampleFlake.packages.${sys}.hello;
+          exampleOverlayPkg = exampleFlake.packages.${sys}.overlay-consumer;
           exampleDevshell = exampleFlake.devShells.${sys}.default;
           exampleOverlay = exampleFlake.overlays.example;
           exampleLib = exampleFlake.lib.example.shout;
+          exampleEmbeddedHome = exampleHost.config.home-manager.users.rhencloud;
+          exampleNoEmbedHost = exampleFlakeNoEmbed.nixosConfigurations.nixos-desktop;
+          exampleNoEmbedHome = exampleFlakeNoEmbed.homeConfigurations."rhencloud@nixos-desktop";
+          exampleApp = exampleFlake.apps.${sys}.hello;
+          exampleFormatter = exampleFlake.formatter.${sys};
+          exampleDeploy = exampleFlake.deploy;
+          exampleSopsModule =
+            (exampleBound.sops.mkModule {
+              sopsNixModule = { };
+              host = "nixos-desktop";
+            })
+              { };
           exampleBasicReal = (import ./examples/basic/flake.nix).outputs {
             self = {
               outPath = ./examples/basic;
@@ -77,7 +121,30 @@
           homeGlobal = pkgs.runCommand "cloud-home-global" { } ''
             printf '%s\n' "${exampleHomeGlobal.config.home.username}" > "$out"
           '';
+          homeEmbedded = pkgs.runCommand "cloud-home-embedded" { } ''
+            test "${exampleEmbeddedHome.home.username}" = "rhencloud"
+            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_SPECIAL_ARG}" = "injected"
+            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
+            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
+            printf '%s\n' "${exampleEmbeddedHome.home.username}" > "$out"
+          '';
+          homeStandalonePkgs = pkgs.runCommand "cloud-home-standalone-pkgs" { } ''
+            test "${exampleHome.config.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
+            test "${exampleHome.config.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
+            test "${exampleHome.config.home.sessionVariables.CLOUD_ALLOW_UNFREE}" = "yes"
+            printf '%s\n' "${exampleHome.config.home.username}" > "$out"
+          '';
+          homeNoEmbed = pkgs.runCommand "cloud-home-no-embed" { } ''
+            if [ "${
+              if builtins.hasAttr "home-manager" exampleNoEmbedHost.options then "yes" else "no"
+            }" = "yes" ]; then
+              echo "embedHomeManager = false 时仍注入了 home-manager 模块" >&2
+              exit 1
+            fi
+            printf '%s\n' "${exampleNoEmbedHome.config.home.username}" > "$out"
+          '';
           package = pkgs.runCommand "cloud-package" { } ''
+            test "$(cat ${exampleOverlayPkg})" = "overlay-ok"
             printf '%s\n' "${examplePkg.name}" > "$out"
           '';
           overlay = pkgs.runCommand "cloud-overlay" { } ''
@@ -101,7 +168,35 @@
               echo "_common 共享模块应始终注入，但未" >&2
               exit 1
             fi
+            if [ -z "${exampleHost.config.environment.variables.CLOUD_DEVELOPMENT or ""}" ]; then
+              echo "development 组合角色模块应注入，但未" >&2
+              exit 1
+            fi
+            test "${exampleHost.config.environment.variables.CLOUD_HOST_CONFIG_ARG}" = "nixos-desktop"
             printf '%s\n' "${exampleHost.config.environment.variables.CLOUD_EXAMPLE}" > "$out"
+          '';
+          extensions = pkgs.runCommand "cloud-extensions" { } ''
+            test "${exampleApp.type}" = "app"
+            test -n "${exampleApp.program}"
+            test -n "${exampleFormatter.drvPath}"
+            test "${exampleDeploy.root}" = "${toString ./examples/basic}"
+            printf '%s\n' "${exampleApp.program}" > "$out"
+          '';
+          moduleoutputs = pkgs.runCommand "cloud-module-outputs" { } ''
+            names="${builtins.concatStringsSep " " (builtins.attrNames exampleFlake.nixosModules)}"
+            case " $names " in
+              *" desktop.example "*) ;;
+              *) echo "nixosModules 缺少目录级键 desktop.example" >&2; exit 1 ;;
+            esac
+            case " $names " in
+              *" desktop.example.nixos.nix "*) echo "nixosModules 仍暴露 magic 文件名" >&2; exit 1 ;;
+              *) ;;
+            esac
+            printf '%s\n' "$names" > "$out"
+          '';
+          sops = pkgs.runCommand "cloud-sops" { } ''
+            test "${exampleSopsModule.sops.defaultSopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
+            printf '%s\n' "${exampleSopsModule.sops.defaultSopsFile}" > "$out"
           '';
           examplereal = pkgs.runCommand "cloud-example-real" { } ''
             if [ -z "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" ]; then

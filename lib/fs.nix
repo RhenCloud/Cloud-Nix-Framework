@@ -73,7 +73,7 @@ let
             matched = lib.filter (f: pred f.base) relevant;
             folders = lib.unique (map folderOf matched);
             names = map nameOf folders;
-            dups = lib.subtractLists (lib.unique names) names;
+            dups = lib.unique (lib.filter (name: lib.count (x: x == name) names > 1) names);
           in
           if dups != [ ] then
             throw "modules 下发现重名模块目录：${lib.concatStringsSep ", " dups}（不同路径映射到同一模块名，请重命名以避免冲突）"

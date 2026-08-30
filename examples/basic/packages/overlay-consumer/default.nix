@@ -1,0 +1,4 @@
+{
+  cloud-example,
+}:
+cloud-example
