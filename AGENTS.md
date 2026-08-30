@@ -65,16 +65,25 @@ Cloud Nix Framework 是一个基于 Nix Flakes 的配置框架，用「目录约
 
 - `hosts/` 主机目录**必须**带 `.<system>` 后缀（`hosts/<name>.<system>/default.nix`），不猜测默认架构；key 为去后缀的 `<name>`。
 - `homes/<user>/<host>.nix` 声明该 home 关联到某主机（自动推导 `nixosConfigurations.<host>` 的 `cloud.users`，无需在 host 中手写）；`homes/<user>/default.nix` 为用户共享 home。
-- `modules/` 单树递归收集三个 magic 文件：`default.nix`（中性共享）、`nixos.nix`（NixOS 专属）、`home.nix`（HM 专属）。NixOS 侧 = 全部 `default.nix` + `nixos.nix`；HM 侧 = 全部 `default.nix` + `home.nix`。
+- `modules/` 单树递归收集四个 magic 文件：`options.nix`（接口声明，始终注入）、`default.nix`（中性共享实现）、`nixos.nix`（NixOS 专属实现）、`home.nix`（home-manager 专属实现）。
+  - NixOS 侧加载顺序：`options.nix` → `default.nix` → `nixos.nix`
+  - home-manager 侧加载顺序：`options.nix` → `default.nix` → `home.nix`
+  - 这样保证接口声明优先加载，实现分离，避免无意中引入不相关代码。
 - 遍历结果按**完整相对路径字典序**排序，保证模块合并顺序稳定、可复现（构建不可依赖文件系统读取次序）。
 - 模块名 = 相对路径去掉 magic 文件名、以 `.` 连接（`modules/desktop/hyprland/nixos.nix` → `desktop.hyprland`）。
 - 空目录、无 magic 文件的叶子目录会被忽略；category 层为可选组织方式，发现逻辑容忍任意深度。
 
 ## 模块/示例/模板约定
 
-- 用户模块按目录自动发现：放 `modules/`（用 `default.nix` 声明 `options.cloud.<name>.*` 接口，`nixos.nix`/`home.nix` 承载专属逻辑），框架在 `mkFlake` 中自动分拣注入，无需手写 `import`。框架本身不内置默认模块。
+- 用户模块按目录自动发现：放 `modules/`。模块结构遵循分层约定：
+  - `options.nix`（可选但推荐）：声明 `options.cloud.<name>.*` 接口，始终在两侧注入
+  - `default.nix`（可选）：中性实现，两侧都会使用
+  - `nixos.nix`（可选）：NixOS 专属实现
+  - `home.nix`（可选）：home-manager 专属实现
+  - 框架在 `mkFlake` 中自动按加载顺序分拣注入，无需手写 `import`。框架本身不内置默认模块。
 - 新增示例：放 `examples/<name>`，目录结构与用户仓库一致（`hosts/`、`homes/`、`modules/`、`overlays/` 等），确保 `nix flake check` 能验证。
 - 新增模板：放 `templates/<name>`，模板应是极简可跑的最小结构。
+
 
 ## 验证要求
 

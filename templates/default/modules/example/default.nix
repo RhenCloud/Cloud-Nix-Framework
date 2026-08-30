@@ -1,12 +1,10 @@
 {
+  config,
   lib,
   ...
 }:
+with lib;
 {
-  options.cloud.example = {
-    enable = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-    };
-  };
+  # 中性实现（两侧都使用）
+  # config 部分在这里
 }

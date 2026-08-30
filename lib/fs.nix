@@ -59,7 +59,12 @@ let
       }
     else
       let
+        # 加载顺序：options.nix → default.nix → 专属 nix
+        # options.nix 始终注入（接口声明）
+        # default.nix 为中性实现（两侧都用）
+        # nixos.nix / home.nix 为专属实现
         magic = [
+          "options.nix"
           "default.nix"
           "nixos.nix"
           "home.nix"
@@ -81,13 +86,19 @@ let
             lib.listToAttrs (
               map (
                 folder:
-                lib.nameValuePair (nameOf folder) (map (f: f.path) (lib.filter (f: folderOf f == folder) matched))
+                let
+                  # 收集该目录下的所有匹配文件，保持加载顺序
+                  filesInFolder = lib.filter (f: folderOf f == folder) matched;
+                in
+                lib.nameValuePair (nameOf folder) (map (f: f.path) filesInFolder)
               ) folders
             );
       in
       {
-        nixos = group (b: b == "default.nix" || b == "nixos.nix");
-        home = group (b: b == "default.nix" || b == "home.nix");
+        # NixOS 侧：options.nix + default.nix + nixos.nix
+        nixos = group (b: b == "options.nix" || b == "default.nix" || b == "nixos.nix");
+        # home 侧：options.nix + default.nix + home.nix
+        home = group (b: b == "options.nix" || b == "default.nix" || b == "home.nix");
       };
 
   importModules =
