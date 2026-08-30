@@ -24,7 +24,7 @@ sops-nix = {
 ```
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/default.nix
+# hosts/nixos-desktop/default.nix
 { cloud, inputs, ... }:
 {
   imports = [

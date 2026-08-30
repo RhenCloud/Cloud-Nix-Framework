@@ -30,7 +30,7 @@ nixosConfigurations.arm-device
 在 `meta.nix` 中声明角色和主机级策略（不是 NixOS 模块，不接受 `config` 参数）：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
   roles = [
     "desktop"
@@ -43,7 +43,7 @@ nixosConfigurations.arm-device
 ```
 
 ```nix
-# hosts/nixos-server.x86_64-linux/meta.nix
+# hosts/nixos-server/meta.nix
 {
   roles = [ "server" ];
   home.embed = false;  # 服务器无 HM 嵌入
@@ -55,7 +55,7 @@ nixosConfigurations.arm-device
 `default.nix` 只交给 NixOS module system 求值，可以在外层直接使用真实 `config`：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/default.nix
+# hosts/nixos-desktop/default.nix
 { config, pkgs, lib, ... }:
 {
   networking.hostName = "nixos-desktop";

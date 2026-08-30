@@ -47,31 +47,29 @@
 
 | 优先级 | 条件 | 结果 |
 | :----: | ---- | ---- |
-| 1 | 目录名含合法 system 后缀：`&lt;name&gt;.&lt;system&gt;`，且 `&lt;system&gt;` 在 `lib.systems.flakeExposed` 中 | `name = &lt;name&gt;`，`system = &lt;system&gt;` |
-| 2 | 目录名无合法后缀，但 `meta.nix` 存在且含 `system = "&lt;system&gt;"` | `name = &lt;dir&gt;`（完整目录名），`system = meta.nix.system` |
-| — | 两者皆无 | `builtins.trace` 警告，跳过（不 `throw`） |
+| 1 | `meta.nix` 存在且含 `system = "&lt;system&gt;"` | `name = &lt;dir&gt;`（完整目录名），`system = meta.nix.system` |
+| — | 无 `meta.nix` 或缺 `system` 字段 | `throw` 错误（强制要求） |
 
 **必要条件**：`hosts/&lt;dir&gt;/default.nix` 必须存在，否则无论何种形式均静默跳过。
 
-**后缀解析细节**：
+**system 声明**：
 
-- `lib.splitString "." &lt;dir&gt;` 后取最后一段作为候选 system。
-- 有效要求：分段数 ≥ 2，且最后一段在 `lib.systems.flakeExposed` 中。
-- 含多个点号的目录名（FQDN 等）建议用 `meta.nix` 声明 system，避免最后一段恰好匹配已知 system 的意外情形。
+- `system` 字段是强制要求，不再支持从目录名后缀推导。
+- 各个 `hosts/&lt;name&gt;/` 必须有 `meta.nix`，其中包含 `system` 字段。
+- 推荐理由：避免目录名中的点号歧义（FQDN 型主机名无需特殊处理），并显式表达架构声明。
 
 ### Output 映射
 
 ```
-hosts/<name>.<system>/default.nix  →  nixosConfigurations.<name>
-hosts/<name>/default.nix            →  nixosConfigurations.<name>  （需 meta.nix.system）
-hosts/<name>.<system>/meta.nix      →  （仅元数据，不直接生成 output）
+hosts/<name>/default.nix            →  nixosConfigurations.<name>
+hosts/<name>/meta.nix               →  （仅元数据，必须含 system，不生成 output）
 ```
 
 ### meta.nix 字段（hosts）
 
 | 字段 | 类型 | 默认值 | 说明 |
 | ---- | ---- | ------ | ---- |
-| `system` | `string` | — | 架构标识符（目录名无后缀时使用） |
+| `system` | `string` | — | **必需**，架构标识符（无默认值，省略将 throw） |
 | `role` | `string` | `null` | 角色过滤标签（单值），与 `roles` 互为别名 |
 | `roles` | `[string]` | `null` | 角色过滤标签（多值），`null` 表示不过滤 |
 | `home.embed` | `bool` | `null` | 是否将关联 home 嵌入此主机（`null` 表示继承全局策略） |

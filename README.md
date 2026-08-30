@@ -49,7 +49,7 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 .
 ├── flake.nix
 ├── hosts/
-│   └── nixos-desktop.x86_64-linux/
+│   └── nixos-desktop/
 │       ├── meta.nix                      # 角色与框架元数据
 │       └── default.nix                   # nixosConfigurations.nixos-desktop
 ├── homes/
@@ -74,8 +74,8 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 
 | 目录 | 生成的 output |
 | ---- | ------------- |
-| `hosts/<name>.<system>/default.nix` | `nixosConfigurations.<name>` |
-| `hosts/<name>.<system>/meta.nix` | 角色与主机级 Home Manager 策略 |
+| `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>/meta.nix` | 角色与主机级 Home Manager 策略（需声明 `system`） |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成 `nixosModules.<目录键>` / `homeModules.<目录键>` |
@@ -190,7 +190,7 @@ outputs = inputs:
   {
     nixosConfigurations.nixos-desktop = cloud.mkSystem {
       host = "nixos-desktop";
-      system = "x86_64-linux"; # 可为 null，从 hosts/<host>.<system>/ 派生
+      system = "x86_64-linux"; # 必须声明在 hosts/<host>/meta.nix
       modules = [ ];
       extraModules = [ ];
       extraNixosModules = [ ];
@@ -244,10 +244,10 @@ outputs = inputs:
 
 ### 求值模型
 
-推荐在 `hosts/<name>.<system>/meta.nix` 保存角色与框架策略。该文件是静态属性集；框架无需预执行函数式 host module，`default.nix` 只交给 NixOS module system 正式求值，因此可在外层使用真实 `config`。
+推荐在 `hosts/<name>/meta.nix` 保存角色与框架策略。该文件是静态属性集，**必须声明 `system` 字段**；框架无需预执行函数式 host module，`default.nix` 只交给 NixOS module system 正式求值，因此可在外层使用真实 `config`。
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
   roles = [ "desktop" "development" ];
   home.useGlobalPkgs = false;
@@ -258,7 +258,7 @@ outputs = inputs:
 
 主机与用户关联仍在正式模块求值前由目录结构推导：
 
-- **NixOS 主机**：从 `hosts/<name>.<system>/` 后缀得到 `system`。
+- **NixOS 主机**：从 `hosts/<name>/meta.nix` 中的 `system` 字段获取系统架构。
 - **per-host home**：`"<user>@<host>"` 继承对应主机架构。
 - **全局 home**：由 `mkHome.system` 指定；`mkFlake` 默认使用 `systems` 首项。
 
@@ -267,7 +267,7 @@ outputs = inputs:
 框架基于 nixpkgs 原生 `image.modules` / `system.build.images`，按主机声明生成 `images.<host>.<format>`，不计入 checks：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/default.nix
+# hosts/nixos-desktop/default.nix
 { ... }:
 {
   config.cloud.images.formats = [ "iso" "raw" "oci" ];
@@ -293,7 +293,7 @@ outputs = inputs:
 推荐在主机静态元数据中声明角色：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
   roles = [
     "desktop"
@@ -371,7 +371,7 @@ inputs.cloud.lib.mkFlake {
 
 `apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`cloud`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`cloud`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `outputs.extra` 补充。
 
-自动发现条目可通过 `outputs.disabled` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀继续兼容。
+自动发现条目可通过 `outputs.disabled` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀在 package 中继续兼容。hosts 目录已改为 `hosts/<name>/` 格式，system 需在 `meta.nix` 中声明。
 
 ### 开发体验
 
@@ -426,7 +426,7 @@ inputs.cloud.lib.mkFlake {
 每台主机可以单独配置：
 
 ```nix
-# hosts/yc-hk-1.x86_64-linux/meta.nix
+# hosts/yc-hk-1/meta.nix
 {
   roles = [ "server" ];
   home.embed = false;
@@ -491,7 +491,7 @@ home.embed = {
 # sops-nix.url = "github:Mic92/sops-nix";
 # sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-# hosts/nixos-desktop.x86_64-linux/default.nix
+# hosts/nixos-desktop/default.nix
 { cloud, inputs, ... }:
 {
   imports = [

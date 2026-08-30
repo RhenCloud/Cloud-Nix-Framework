@@ -47,8 +47,6 @@ let
         )
       );
 
-  knownSystemSuffixes = lib.systems.flakeExposed;
-
   parseHostDir =
     e:
     let
@@ -56,24 +54,13 @@ let
       metaPath = projectRoot + "/hosts/" + rawName + "/meta.nix";
       meta = readMetadata metaPath;
       defPath = projectRoot + "/hosts/" + rawName + "/default.nix";
-      parts = lib.splitString "." rawName;
-      suffix = lib.last parts;
-      hasSuffix = lib.length parts >= 2 && lib.elem suffix knownSystemSuffixes;
-      nameFromSuffix = lib.concatStringsSep "." (lib.init parts);
       system = meta.system or null;
     in
     if !builtins.pathExists defPath then
       null
-    else if hasSuffix then
-      {
-        dir = rawName;
-        name = nameFromSuffix;
-        system = suffix;
-        path = defPath;
-        inherit metaPath;
-        inherit meta;
-      }
-    else if system != null then
+    else if system == null then
+      builtins.throw "云框架错误：hosts/${rawName}/meta.nix 必须声明 system（例如 system = \"x86_64-linux\"）"
+    else
       {
         dir = rawName;
         name = rawName;
@@ -81,9 +68,7 @@ let
         path = defPath;
         inherit metaPath;
         inherit meta;
-      }
-    else
-      builtins.trace "警告：hosts/${rawName} 无法解析 system（目录名不含已知 system 后缀，meta.nix 也未声明 system），已跳过" null;
+      };
 
   localGroupedModules =
     if builtins.pathExists (projectRoot + "/modules") then

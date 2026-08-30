@@ -6,10 +6,10 @@
 .
 ├── flake.nix
 ├── hosts/
-│   ├── nixos-desktop.x86_64-linux/       # 目录名带 system 后缀（推荐）
-│   │   ├── meta.nix                      # 角色与框架元数据
+│   ├── nixos-desktop/
+│   │   ├── meta.nix                      # 必须声明 system 和其他角色/策略
 │   │   └── default.nix                   # nixosConfigurations.nixos-desktop
-│   └── my.host.example.com/              # FQDN 主机名：在 meta.nix 中声明 system
+│   └── my-host-fqdn/
 │       ├── meta.nix                      # { system = "x86_64-linux"; roles = [...]; }
 │       └── default.nix
 ├── homes/
@@ -37,8 +37,8 @@
 
 | 目录 | 生成的 output |
 | ---- | ------------- |
-| `hosts/<name>.<system>/default.nix` 或 `hosts/<name>/default.nix`（含 `meta.nix { system }`）| `nixosConfigurations.<name>` |
-| `hosts/<name>.<system>/meta.nix` | 角色与每主机 Home Manager 策略，不直接生成 output |
+| `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>/meta.nix` | 角色与每主机 Home Manager 策略，**必须声明 `system`** |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成目录级 `nixosModules` / `homeModules` |
@@ -53,39 +53,41 @@
 | `shells/<name>/default.nix` | `devShells.<system>.<name>` |
 | `checks/<name>/default.nix` | `checks.<system>.<name>` |
 
-::: warning 主机目录 system 解析规则
+## 主机命名与 System 声明
 
-`hosts/` 下的主机目录按以下优先级推断 system：
+从 0.4.0 起，hosts 目录改用裸名称：`hosts/<name>/`，system 必须在 `meta.nix` 中显式声明。
 
-1. **目录后缀**（推荐）：`nixos-desktop.x86_64-linux/` — 后缀必须是 `lib.systems.flakeExposed` 中的已知 system。
-2. **`meta.nix` 声明**：无后缀目录可在 `meta.nix` 中写 `{ system = "x86_64-linux"; }`。
+**不再支持**的方式：
+- `hosts/nixos-desktop.x86_64-linux/` ❌（旧格式，不再解析后缀）
 
-两种形式可共存。不满足任一条件的目录会输出 `trace` 警告并跳过，不会报错中止。FQDN 形式的主机名（含多个点号）建议使用 `meta.nix` 声明 system，避免后缀解析歧义。
+**唯一支持**的方式：
+- `hosts/nixos-desktop/` ✅（必须在 `meta.nix` 中写 `system = "x86_64-linux"`）
 
-:::
+这消除了目录名中的点号歧义（FQDN 型主机名不再造成困惑），并明确表达 system 的强制要求。
 
 ## 主机元数据
 
 推荐把角色和框架策略放在独立的 `meta.nix`：
 
 ```nix
-# hosts/yc-hk-1.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
-  roles = [ "server" ];
+  system = "x86_64-linux";  # 必须，指定此主机的系统架构
+  roles = [ "desktop" "development" ];
 
   home = {
-    embed = false;
-    useGlobalPkgs = false;
+    embed = true;             # 是否嵌入式 Home Manager
+    useGlobalPkgs = false;    # Home Manager useGlobalPkgs 设置
   };
 }
 ```
 
-角色同时支持单字符串 `role`（与 `roles` 互为别名）。主机元数据优先于 `mkFlake` 的全局策略。旧字段 `embedHomeManager`、`homeManagerUseGlobalPkgs`、`homeManager.embed`、`homeManager.useGlobalPkgs` 仍兼容，但已弃用，会输出 trace 警告。
+主机元数据优先于 `mkFlake` 的全局策略。旧字段 `embedHomeManager`、`homeManagerUseGlobalPkgs`、`homeManager.embed`、`homeManager.useGlobalPkgs` 仍兼容，但已弃用，会输出 trace 警告。
 
 `meta.nix` 必须直接返回属性集，不是 NixOS module，也不会收到 `config` 等模块参数。框架读取它以后，`default.nix` 只由 NixOS module system 正式求值，可以在外层安全使用真实 `config`：
 
 ```nix
-# hosts/yc-hk-1.x86_64-linux/default.nix
+# hosts/nixos-desktop/default.nix
 { config, ... }:
 {
   services.openssh.ports = [
@@ -94,11 +96,10 @@
 }
 ```
 
-`default.nix` 是纯 NixOS 模块，不再被框架解析框架元数据。新配置请始终使用 `meta.nix` 声明角色和框架策略。
+`default.nix` 是纯 NixOS 模块，不再被框架解析框架元数据。新配置请始终使用 `meta.nix` 声明 system、角色和框架策略。
 
 ## 主机与 home 自动关联
 
-- 主机架构来自 `hosts/<name>.<system>/` 的目录后缀。
 - `homes/<user>/<host>.nix` 自动把用户关联到该主机，并生成 `homeConfigurations."<user>@<host>"`。
 - `homes/<user>/default.nix` 是共享 home，并生成 `homeConfigurations.<user>`。
 - `home.embed = false` 只关闭该主机的嵌入式 HM，独立 home output 仍然保留。

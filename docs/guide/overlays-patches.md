@@ -77,7 +77,7 @@ outputs = inputs:
 嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。若 Stylix 等 HM 模块需要设置自己的 overlay，可全局或按主机设置 `home.useGlobalPkgs = false`。框架会把基础 `nixpkgs.config` 与 overlays 注入 HM 自己的 nixpkgs，避免丢失统一配置：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
   home.useGlobalPkgs = false;
 }

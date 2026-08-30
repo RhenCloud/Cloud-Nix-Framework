@@ -51,8 +51,9 @@
 推荐在主机的静态元数据文件中声明角色：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
+  system = "x86_64-linux";
   roles = [
     "desktop"
     "development"

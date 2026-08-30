@@ -28,6 +28,18 @@
 - 文档重构：guide / concepts / reference / migration / advanced 五区分层。
 - Discovery 规范文档（`docs/reference/discovery.md`）。
 
+### 破坏性变更
+
+- **hosts 目录命名**（0.4.0）：从 `hosts/<name>.<system>/` 改为 `hosts/<name>/`，system 必须在 `meta.nix` 中显式声明。
+  - **迁移**：重命名所有 `hosts/` 子目录（去掉 `.x86_64-linux` 等后缀），并在各目录的 `meta.nix` 中添加 `system = "<system>"` 字段。
+  - **理由**：消除目录名中的点号歧义（FQDN 型主机名无需特殊处理），并显式表达 system 是强制声明而非可选推导。
+  - **示例**：
+    ```
+    旧：hosts/nixos-desktop.x86_64-linux/meta.nix
+    新：hosts/nixos-desktop/meta.nix { system = "x86_64-linux"; ... }
+    ```
+
+
 ### 变更
 
 - `meta.nix` 与 `default.nix` 职责严格分离：`default.nix` 不再被 CNF 解析元数据，只交给 NixOS module system。

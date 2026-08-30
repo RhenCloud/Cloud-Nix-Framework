@@ -89,7 +89,7 @@ let
       matches = lib.filter (h: h.name == host) discovered.hosts;
     in
     if matches == [ ] then
-      throw "未发现主机 '${host}'，请在 hosts/${host}.<system>/ 下创建 default.nix"
+      throw "未发现主机 '${host}'，请创建 hosts/${host}/ 目录并在 meta.nix 中声明 system"
     else
       lib.head matches;
 
@@ -97,14 +97,8 @@ let
     { host, pkgs }:
     let
       hostRec = resolveHost host;
-      hasMeta = builtins.pathExists hostRec.metaPath;
     in
-    if hasMeta then
-      normalizeHostMetadata hostRec.meta
-    else
-      builtins.trace "警告：主机 '${host}' 缺少 meta.nix，角色过滤已关闭；建议创建 hosts/${hostRec.dir}/meta.nix" (
-        normalizeHostMetadata { }
-      );
+    normalizeHostMetadata hostRec.meta;
 
   resolveHostPolicy =
     {

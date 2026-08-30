@@ -75,7 +75,7 @@ outputs = inputs:
 解决方法：在需要的主机上关闭 `useGlobalPkgs`：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
   home.useGlobalPkgs = false;
 }

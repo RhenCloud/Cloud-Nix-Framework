@@ -74,8 +74,10 @@ outputs = inputs:
 推荐在每台主机的 `meta.nix` 声明角色和主机级策略：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/meta.nix
+# hosts/nixos-desktop/meta.nix
 {
+  system = "x86_64-linux";
+
   roles = [
     "desktop"
     "development"
