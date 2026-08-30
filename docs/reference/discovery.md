@@ -236,12 +236,12 @@ modules 目录当前不读取 `meta.nix`；过滤通过主机的角色声明完�
 
 ```
 packages/<name>.<system>/default.nix
-    packages/<name> = lib.splitString "." <dir>  →  init 部分
-        <system>        = last 部分
-            有效要求：最后一段在 knownSystems 中
-                          （knownSystems = systems ++ lib.systems.flakeExposed）
-                          ```
-                          
+  packages/<name> = lib.splitString "." <dir>  →  init 部分
+  <system> = last 部分
+  有效要求：最后一段在 knownSystems 中
+            （knownSystems = systems ++ lib.systems.flakeExposed）
+```
+
 若 `meta.nix` 显式声明了 `systems`，完整目录名作为包名，不拆分后缀。
 
 ### Output 映射
