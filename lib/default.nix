@@ -53,6 +53,18 @@ let
           type = lib.types.listOf lib.types.str;
           default = [ ];
         };
+        homeManager = {
+          backupFileExtension = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "嵌入式 home-manager 的 backupFileExtension；仅当该主机启用了 HM 嵌入时生效";
+          };
+          embed = lib.mkOption {
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+            description = "仅供声明式检查用；实际嵌入策略由 meta.nix.embedHomeManager 或 mkFlake.embedHomeManager 控制";
+          };
+        };
       };
     };
 
@@ -277,39 +289,45 @@ let
             ++ discovered.registryModules.nixos
             ++ [ hostMod ];
 
-          embedModule = _: {
-            imports = [
-              (
-                if hm == null then
-                  throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " users}），但缺少 home-manager input"
-                else
-                  hm.nixosModules.home-manager
-              )
-            ];
-            home-manager = {
-              inherit useGlobalPkgs;
-              useUserPackages = true;
-              extraSpecialArgs = specialArgs;
-              users = lib.genAttrs users (
-                u:
-                {
-                  imports =
-                    homeModulesFor {
-                      user = u;
-                      inherit host roles;
-                    }
-                    ++ extraModules
-                    ++ extraHomeModules;
-                }
-                // lib.optionalAttrs (!useGlobalPkgs) {
-                  nixpkgs = {
-                    config = nixpkgsConfig;
-                    overlays = overlayList ++ extraOverlays;
-                  };
-                }
-              );
+          embedModule =
+            { config, lib, ... }:
+            let
+              bfe = config.cloud.homeManager.backupFileExtension;
+            in
+            {
+              imports = [
+                (
+                  if hm == null then
+                    throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " users}），但缺少 home-manager input"
+                  else
+                    hm.nixosModules.home-manager
+                )
+              ];
+              home-manager = {
+                inherit useGlobalPkgs;
+                useUserPackages = true;
+                extraSpecialArgs = specialArgs;
+                users = lib.genAttrs users (
+                  u:
+                  {
+                    imports =
+                      homeModulesFor {
+                        user = u;
+                        inherit host roles;
+                      }
+                      ++ extraModules
+                      ++ extraHomeModules;
+                  }
+                  // lib.optionalAttrs (!useGlobalPkgs) {
+                    nixpkgs = {
+                      config = nixpkgsConfig;
+                      overlays = overlayList ++ extraOverlays;
+                    };
+                  }
+                );
+              }
+              // lib.optionalAttrs (bfe != null) { backupFileExtension = bfe; };
             };
-          };
 
           setCloudModule = _: { config.cloud.users = users; };
 
@@ -383,6 +401,7 @@ let
           embedHomeManager ? true,
           homeManagerUseGlobalPkgs ? true,
           disabledOutputs ? [ ],
+          expectedOutputs ? { },
           ...
         }:
         let
@@ -658,16 +677,56 @@ let
                   system = sys;
                   inherit nixpkgsConfig extraOverlays;
                 };
+                discoveredHosts = map (host: host.name) discovered.hosts;
+                discoveredHomes = builtins.attrNames homeConfigurations;
+                discoveredPkgs = builtins.attrNames packages.${sys};
+                discoveredApps = if appsEnabled then builtins.attrNames apps.${sys} else [ ];
                 report = {
-                  hosts = map (host: host.name) discovered.hosts;
-                  homes = builtins.attrNames homeConfigurations;
-                  packages = builtins.attrNames packages.${sys};
-                  apps = if appsEnabled then builtins.attrNames apps.${sys} else [ ];
+                  hosts = discoveredHosts;
+                  homes = discoveredHomes;
+                  packages = discoveredPkgs;
+                  apps = discoveredApps;
                   nixosModules = builtins.attrNames discovered.localGroupedModules.nixos;
                   homeModules = builtins.attrNames discovered.localGroupedModules.home;
                 };
+                checkExpected =
+                  kind: expected: actual:
+                  let
+                    missing = lib.filter (x: !lib.elem x actual) expected;
+                    script = pkgs.writeShellScript "check-discovery-${kind}-${sys}" ''
+                      set -euo pipefail
+                      missing=${lib.escapeShellArg (builtins.toJSON missing)}
+                      if [ "$missing" != "[]" ]; then
+                        echo "cloud-discovery: expectedOutputs.${kind} 缺少以下项目："
+                        echo "$missing" | ${pkgs.jq}/bin/jq -r '.[]' | sed 's/^/  - /'
+                        exit 1
+                      fi
+                      echo "cloud-discovery: ${kind} OK"
+                    '';
+                  in
+                  pkgs.runCommand "cloud-discovery-check-${kind}-${sys}" { } "bash ${script} && touch $out";
+                expectedChecks = lib.concatLists (
+                  lib.mapAttrsToList (
+                    kind: expected:
+                    let
+                      actual =
+                        if kind == "hosts" then
+                          discoveredHosts
+                        else if kind == "homes" then
+                          discoveredHomes
+                        else if kind == "packages" then
+                          discoveredPkgs
+                        else if kind == "apps" then
+                          discoveredApps
+                        else
+                          throw "expectedOutputs 不支持字段 '${kind}'，可用：hosts, homes, packages, apps";
+                    in
+                    [ (lib.nameValuePair "cloud-discovery-expected-${kind}" (checkExpected kind expected actual)) ]
+                  ) expectedOutputs
+                );
               in
               discoveredChecks.${sys}
+              // lib.listToAttrs expectedChecks
               // {
                 cloud-discovery = pkgs.writeText "cloud-discovery-${sys}.json" (builtins.toJSON report);
               }

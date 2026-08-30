@@ -40,7 +40,7 @@ sops-nix = {
 
 ## 同时引用 common 与 host 文件
 
-`cloud.sops.secret` 传入 `name` 时返回可直接导入的模块片段：
+### 明确指定 host
 
 ```nix
 { cloud, ... }:
@@ -60,7 +60,30 @@ sops-nix = {
 }
 ```
 
-省略 `name` 时，helper 返回单个 `sops.secrets.<name>` 所需的 option 属性集。它只是选择路径，不会合并 YAML；返回值可继续与其他 secret 选项合并：
+### 自动推导当前主机名（推荐）
+
+`source = "host"` 省略 `host` 参数时，helper 返回一个 NixOS module，在求值阶段从 `config.networking.hostName` 自动推导路径。适合多主机共用同名 secret、各自对应 `secrets/hosts/<host>.yaml` 的场景：
+
+```nix
+{ cloud, ... }:
+{
+  imports = [
+    # 自动使用 config.networking.hostName 推导 secrets/hosts/<host>.yaml
+    (cloud.sops.secret {
+      source = "host";
+      name = "mihomo-proxies";
+    })
+  ];
+}
+```
+
+::: tip
+
+自动推导依赖 `networking.hostName` 在求值时已确定。若主机模块通过其他模块动态设置 `hostName`，建议显式传入 `host` 参数。
+
+:::
+
+省略 `name` 时，helper 返回单个 `sops.secrets.<name>` 所需的 option 属性集（不是 module），可继续与其他选项合并：
 
 ```nix
 sops.secrets.password-hash =
@@ -74,11 +97,14 @@ sops.secrets.password-hash =
 
 ## API
 
-- `cloud.sops.commonFile`
-- `cloud.sops.hostFile host`
-- `cloud.sops.defaultFile host`
-- `cloud.sops.secret { source = "common" | "host"; host ? null; name ? null; }`
-- `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`
+- `cloud.sops.commonFile`：`<root>/secrets/common.yaml` 路径
+- `cloud.sops.hostFile host`：`<root>/secrets/hosts/<host>.yaml` 路径
+- `cloud.sops.defaultFile host`：`host == null` 时取 `commonFile`，否则取 `hostFile host`
+- `cloud.sops.secret { source; host?; name?; }`：
+  - `source = "common"` → 返回 `{ sopsFile = ...; }` 或带 `name` 时返回 module/attrset
+  - `source = "host"; host = "foo"` → 返回明确路径的属性集/module
+  - `source = "host"`（省略 `host`）→ 返回 NixOS module，求值时从 `config.networking.hostName` 推导
+- `cloud.sops.mkModule { sopsNixModule; host?; defaultSopsFile?; }`
 
 ## 自定义默认文件
 

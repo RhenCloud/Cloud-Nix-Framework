@@ -90,3 +90,35 @@
 - `extraModules`：进入每台 NixOS 主机和每个 home。
 - `extraNixosModules`：仅进入 NixOS。
 - `extraHomeModules`：进入独立与嵌入式 home-manager。
+
+## 公共模块与嵌入式 home-manager 的注意事项
+
+`modules/_common/` 下的 `nixos.nix` 文件会注入**所有** NixOS 主机，包括禁用了 HM 嵌入（`embedHomeManager = false`）的主机。
+
+**不要**在公共 `nixos.nix` 模块中直接引用 `home-manager.*` option（如 `home-manager.backupFileExtension`、`home-manager.users` 等）——这些 option 由 home-manager NixOS 模块提供，仅当该主机启用了 HM 嵌入时才存在。在禁用嵌入的主机上求值会报"undefined option"错误。
+
+### 正确做法：使用 `cloud.homeManager.backupFileExtension`
+
+框架在所有 NixOS 主机上声明了 `cloud.homeManager.backupFileExtension`，无论嵌入状态。框架在启用嵌入时自动将其透传到 `home-manager.backupFileExtension`：
+
+```nix
+# modules/_common/hm-config/nixos.nix — 所有主机均可使用，无需条件判断
+{ ... }:
+{
+  cloud.homeManager.backupFileExtension = "backup";
+}
+```
+
+### 如果必须条件性引用 `home-manager.*`
+
+若需要访问 `home-manager.*` 命名空间下的其他 option，用 `lib.mkIf` 配合 `config.cloud.users != []` 或专属模块进行保护：
+
+```nix
+{ config, lib, ... }:
+{
+  # 仅当此主机有关联 home 用户时才设置
+  home-manager.useUserPackages = lib.mkIf (config.cloud.users != [ ]) true;
+}
+```
+
+但更推荐将此类配置放到**按角色过滤的 `nixos.nix`** 而非 `_common/`，避免在无 HM 主机上意外报错。
