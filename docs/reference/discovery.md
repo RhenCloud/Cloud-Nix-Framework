@@ -1,0 +1,395 @@
+# Discovery 规范
+
+本文档定义 **CNF Discovery Specification v1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
+
+## 术语
+
+| 术语 | 含义 |
+| ---- | ---- |
+| **发现**（discovery） | 框架扫描项目目录、识别符合约定的文件并提取元数据的过程 |
+| **项目根**（root） | `mkFlake` 调用时的配置仓库根目录，默认为 `self.outPath` |
+| **magic 文件** | 具有固定语义的文件名：`default.nix`、`nixos.nix`、`home.nix`、`meta.nix` |
+| **meta.nix** | 与某目录并列的元数据文件，直接返回属性集，不接收模块参数 |
+| **output key** | 最终出现在 flake outputs 属性集中的名称 |
+
+---
+
+## 通用规则
+
+### 遍历顺序
+
+所有目录遍历结果均按**完整相对路径字典序**升序排序，在发现阶段完成。排序保证模块合并顺序稳定、可复现，不依赖 `builtins.readDir` 的返回次序（未定义）。
+
+### meta.nix 约定
+
+- `meta.nix` 必须直接返回属性集（`{ ... }`），不能是函数、模块或其他类型。
+- 违反此约定将在发现阶段 `throw` 报错，不会静默忽略。
+- 所有目录类型均支持 `meta.nix`，但各目录可用字段不同（见各节）。
+- `meta.nix` 不存在时等价于 `{}`，所有字段取各自的规范默认值。
+
+### 禁用优先级
+
+两种禁用机制独立生效，任一满足即禁用：
+
+1. **`meta.nix { enable = false; }`**：在发现阶段之后、output 构造之前过滤。
+2. **`mkFlake` 的 `disabledOutputs`**：在 output 构造阶段按名称过滤。
+
+命名冲突（同一 output key 由多条规则产生）：发现阶段提前 `throw`，不进入 output 构造。
+
+---
+## hosts/ — NixOS 主机
+
+### 发现规则
+
+扫描范围：`hosts/` 下的**直接子目录**（不递归）。
+
+对每个子目录 `hosts/<dir>/`，按以下优先级推断 output key 与 system：
+
+| 优先级 | 条件 | 结果 |
+| :----: | ---- | ---- |
+| 1 | 目录名含合法 system 后缀：`<name>.<system>`，且 `<system>` 在 `lib.systems.flakeExposed` 中 | `name = <name>`，`system = <system>` |
+| 2 | 目录名无合法后缀，但 `meta.nix` 存在且含 `system = "<system>"` | `name = <dir>`（完整目录名），`system = meta.nix.system` |
+| — | 两者皆无 | `builtins.trace` 警告，跳过（不 `throw`） |
+
+**必要条件**：`hosts/<dir>/default.nix` 必须存在，否则无论何种形式均静默跳过。
+
+**后缀解析细节**：
+
+- `lib.splitString "." <dir>` 后取最后一段作为候选 system。
+- 有效要求：分段数 ≥ 2，且最后一段在 `lib.systems.flakeExposed` 中。
+- 含多个点号的目录名（FQDN 等）建议用 `meta.nix` 声明 system，避免最后一段恰好匹配已知 system 的意外情形。
+
+### Output 映射
+
+```
+hosts/<name>.<system>/default.nix  →  nixosConfigurations.<name>
+hosts/<name>/default.nix            →  nixosConfigurations.<name>  （需 meta.nix.system）
+hosts/<name>.<system>/meta.nix      →  （仅元数据，不直接生成 output）
+```
+
+### meta.nix 字段（hosts）
+
+| 字段 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `system` | `string` | — | 架构标识符（目录名无后缀时使用） |
+| `role` | `string` | `null` | 角色过滤标签（单值），与 `roles` 互为别名 |
+| `roles` | `[string]` | `null` | 角色过滤标签（多值），`null` 表示不过滤 |
+| `embedHomeManager` | `bool` | `null` | 是否将关联 home 嵌入此主机（`null` 表示继承全局策略） |
+| `homeManagerUseGlobalPkgs` | `bool` | `null` | 嵌入式 HM 是否复用 NixOS pkgs（`null` 表示继承全局策略） |
+| `homeManager.embed` | `bool` | `null` | `embedHomeManager` 的等价写法，两者不能同时出现 |
+| `homeManager.useGlobalPkgs` | `bool` | `null` | `homeManagerUseGlobalPkgs` 的等价写法 |
+| `images.formats` | `[string]` | `[]` | 需要生成的镜像变体（如 `["iso"]`），在发现阶段读取，优先于模块 config |
+
+**优先级（高 → 低）**：`meta.nix` 字段 > `mkFlake` 全局参数 > 框架硬编码默认值。
+
+### 注入到 nixosConfigurations
+
+框架按以下顺序合并模块，后者优先级高于前者（NixOS module system 的 `mkDefault`/`mkForce` 仍适用）：
+
+```
+1. optionsCloud（框架 options 声明）
+2. setCloudModule（写入 config.cloud.users）
+3. nixpkgs.pkgs 注入
+4. embedModule（home-manager NixOS 模块，仅当 embedForHost && users != []）
+5. 自动发现的 modules/（按角色过滤，字典序）
+6. moduleRegistries 中的外部模块
+7. 主机自身的 default.nix（去除框架元数据字段）
+8. mkFlake/mkSystem 传入的 extraModules
+9. mkFlake/mkSystem 传入的 extraNixosModules
+```
+
+---
+## homes/ — Home Manager 配置
+
+### 发现规则
+
+扫描范围：`homes/` 下的**直接子目录**（每个子目录对应一个用户）。
+
+```
+homes/<user>/
+    ├── default.nix   →  homeConfigurations.<user>       （全局/共享 home）
+        ├── <host>.nix    →  homeConfigurations."<user>@<host>"  （主机关联 home）
+            └── <host2>.nix   →  homeConfigurations."<user>@<host2>"
+            ```
+            
+- `<host>` 必须与 `hosts/` 中已发现的某主机 name 完全一致，否则该文件被忽略（不报错）。
+- `default.nix` 专用于全局 home，不会生成 `<user>@default` output。
+- 同一用户目录下可同时存在 `default.nix` 与若干 `<host>.nix`，互不冲突。
+- 子目录遍历**不递归**；`homes/<user>/sub/foo.nix` 会被忽略。
+
+### Output 映射
+
+| 文件 | output key | system 来源 |
+| ---- | ---------- | ----------- |
+| `homes/<user>/default.nix` | `homeConfigurations.<user>` | `mkFlake` 的 `systems` 首项 |
+| `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` | 对应主机目录的 system |
+
+::: warning 全局 home 的 system
+
+`homeConfigurations.<user>` 使用 `systems` 的第一个元素作为 system。若 `systems` 含多个架构，全局 home 将只对第一个架构有效。需要多架构全局 home 时，建议将用户明确关联到各架构的主机（通过 `<host>.nix`），或在 `homes/<user>/meta.nix` 中声明 `system`（待实现）。
+
+:::
+    
+    ### 自动嵌入 NixOS
+        
+    当 `homes/<user>/<host>.nix` 存在时：
+    
+1. 框架将 `<user>` 写入 `nixosConfigurations.<host>` 的 `config.cloud.users`。
+2. 若该主机的 `embedHomeManager` 为 `true`，框架自动注入 `home-manager.users.<user>` 模块（无需在主机模块中手写 `home-manager.users`）。
+3. 若 `embedHomeManager` 为 `false`，仅生成独立的 `homeConfigurations."<user>@<host>"`，不嵌入 NixOS。
+
+### 模块注入顺序（独立 home）
+
+```
+1. optionsCloudHome（框架 options 声明）
+2. 自动发现的 modules/（home 侧，按角色过滤，字典序）
+3. homes/<user>/default.nix（若存在）
+4. homes/<user>/<host>.nix（若存在且当前构造的是 per-host home）
+5. mkFlake/mkHome 传入的 extraModules
+6. mkFlake/mkHome 传入的 extraHomeModules
+```
+
+### meta.nix 字段（homes）
+
+homes 目录当前不读取 `meta.nix`；保留位置供未来使用（如声明全局 home 的 system）。
+
+---
+
+## modules/ — 自动发现模块
+
+### 发现规则
+
+扫描范围：`modules/` 下的**全部层级**（递归遍历）。
+
+识别以下 magic 文件名：
+
+| 文件名 | 注入到 | 含义 |
+| ------ | ------ | ---- |
+| `default.nix` | NixOS 侧 + HM 侧 | 平台中性共享逻辑（options 声明等） |
+| `nixos.nix` | NixOS 侧 | NixOS 专属实现 |
+| `home.nix` | HM 侧 | Home Manager 专属实现 |
+
+同一目录可同时存在多个 magic 文件；无 magic 文件的目录被忽略。
+
+### 模块名推导
+
+```
+modules/<path>/default.nix  →  模块名 = path（以 "/" 替换为 "."）
+modules/<path>/nixos.nix    →  同上
+modules/<path>/home.nix     →  同上
+```
+
+示例：`modules/desktop/hyprland/nixos.nix` → 模块名 `desktop.hyprland`
+
+模块名重复（不同路径映射到同一名称）时，发现阶段 `throw` 报错。
+
+### 角色过滤
+
+当主机 `meta.nix` 声明了 `roles`，框架只注入满足以下任一条件的模块路径：
+
+1. 文件名是 `default.nix`（平台中性文件始终注入）。
+2. 第一级目录名以 `_` 开头（common 约定，始终注入，如 `modules/_common/`）。
+3. 第一级目录名与某个角色名完全一致。
+
+**`roles = null`（未声明）时不过滤**，所有发现的模块均注入。
+
+### Output 映射（模块注册表）
+
+自动发现的模块还生成以下 flake outputs，供外部 flake 引用：
+
+```
+nixosModules.<name>   →  { imports = [ <所有属于该目录组的 NixOS 侧路径> ]; }
+homeModules.<name>    →  { imports = [ <所有属于该目录组的 HM 侧路径> ]; }
+```
+
+`<name>` 即上述模块名（点分路径）。
+
+### meta.nix 字段（modules）
+
+modules 目录当前不读取 `meta.nix`；过滤通过主机的角色声明完成。
+
+---
+## packages/ — 包
+
+### 发现规则（三种布局，按优先级）
+
+框架支持三种 package 布局，解析时按以下顺序检查，三者可共存：
+
+| 布局 | 目录约定 | system 来源 | 推荐程度 |
+| ---- | -------- | ----------- | -------- |
+| **system-first**（推荐） | `packages/<system>/<name>/default.nix` | 目录名即 system | ★★★ |
+| **无后缀**（跨平台） | `packages/<name>/default.nix` | 所有 `systems` | ★★★ |
+| **后缀兼容**（旧式） | `packages/<name>.<system>/default.nix` | 目录后缀解析 | ★（已不推荐） |
+
+**解析优先级（system-first 优先）**：
+
+对 `packages/` 下的一级目录 `<dir>`：
+
+1. 若 `<dir>` 本身有 `default.nix`，归为"无后缀"或"后缀兼容"布局。
+2. 若 `<dir>` 没有 `default.nix`，将 `<dir>` 视为 system 名，递归发现其子目录作为 system-first 包。
+
+这意味着 system-first 与无后缀布局**不能共用同一个一级目录名**：若 `packages/x86_64-linux/` 下存在 `default.nix`，该目录被视为包而不是 system 前缀。
+
+**后缀兼容解析细节**（仅当 `meta.nix` 未声明 `systems` 时触发）：
+
+```
+packages/<name>.<system>/default.nix
+    packages/<name> = lib.splitString "." <dir>  →  init 部分
+        <system>        = last 部分
+            有效要求：最后一段在 knownSystems 中
+                          （knownSystems = systems ++ lib.systems.flakeExposed）
+                          ```
+                          
+若 `meta.nix` 显式声明了 `systems`，完整目录名作为包名，不拆分后缀。
+
+### Output 映射
+
+```
+packages/<name>/default.nix            →  packages.<system>.<name>   （对所有 systems）
+packages/<system>/<name>/default.nix   →  packages.<system>.<name>   （仅对应 system）
+packages/<name>.<system>/default.nix   →  packages.<system>.<name>   （旧式，不推荐）
+```
+
+### meta.nix 字段（packages）
+
+| 字段 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `enable` | `bool` | `true` | 是否生成此 output |
+| `systems` | `[string]` | `null` | 显式指定支持的架构列表；声明后禁用后缀兼容解析 |
+
+### callPackage 调用约定
+
+框架用 `pkgs.callPackage` 调用包文件，额外注入 `{ inputs, self, cloud }`（若包函数声明了这些参数）。
+
+---
+
+## overlays/ — Nixpkgs Overlays
+
+### 发现规则
+
+扫描范围：`overlays/` 下的**直接子目录**。
+
+必要条件：`overlays/<name>/default.nix` 存在。
+
+### Output 映射
+
+```
+overlays/<name>/default.nix  →  overlays.<name>
+```
+
+所有自动发现的 overlays 自动应用到：NixOS pkgs、独立 HM pkgs、嵌入式 HM pkgs（当 `useGlobalPkgs = false` 时）、packages / devShells / checks / apps / formatter 的 pkgs。
+
+### Overlay 文件签名
+
+框架按以下顺序检测签名：
+
+1. `functionArgs` 含 `inputs`、`self` 或 `cloud` → 解构框架参数签名，调用 `imported { inherit inputs self cloud; }`。
+2. 以 `{ inherit inputs self cloud; }` 调用后返回函数 → 位置参数框架签名（如 `extras: final: prev: ...`）。
+3. 其余 → 标准 nixpkgs overlay（`final: prev: ...` 或直接返回属性集，但后者会在 nixpkgs 应用时报错）。
+
+### meta.nix 字段（overlays）
+
+overlays 目录当前不读取 `meta.nix`。
+
+---
+
+## apps/ / shells/ / checks/ — 命名 per-system outputs
+
+### 发现规则
+
+三个目录采用相同规则，扫描范围均为**直接子目录**：
+
+```
+apps/<name>/default.nix    →  apps.<system>.<name>
+shells/<name>/default.nix  →  devShells.<system>.<name>
+checks/<name>/default.nix  →  checks.<system>.<name>
+```
+
+### meta.nix 字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `enable` | `bool` | `true` | 是否生成此 output |
+| `systems` | `[string]` | `null` | 限定支持的架构 |
+
+### 保留名称
+
+`cloud-discovery` 在 `checks` 命名空间下是**框架保留名称**，会被框架自动生成。用户 `checks/` 目录下若存在同名 `cloud-discovery/` 子目录，发现阶段将 `throw` 报错。
+
+---
+
+## formatter/ / deploy/ — 单例 outputs
+
+```
+formatter/default.nix  →  formatter.<system>   （per-system）
+deploy/default.nix     →  deploy               （全局单例）
+```
+
+- 两者均只扫描固定路径，不递归。
+- `formatter` 是 per-system output，`deploy` 是全局单例。
+- `meta.nix` 支持 `enable`（`bool`）；`formatter` 额外支持 `systems`。
+
+---
+
+## lib/ — 用户库函数
+
+```
+lib/<name>.nix  →  lib.<name>
+```
+
+- 扫描范围：`lib/` 下的**直接 .nix 文件**（不递归，不含子目录）。
+- output key 为去掉 `.nix` 后缀的文件名。
+- 框架用 `importFile` 调用，注入 `{ lib, inputs, self, cloud }`（按函数声明按需传入）。
+- 框架自身的 `lib/` 文件（`discover.nix`、`host.nix` 等）不在扫描范围内。
+
+---
+
+## 发现流程全图
+
+```
+mkFlake 调用
+│
+├─ [1] 读取 lib/discover.nix（发现阶段，纯属性集，不求值 config）
+│       ├── hosts/       → discovered.hosts      [ { name, system, path, meta } ]
+│       ├── homes/       → discovered.homes      [ { user, hosts } ]
+│       ├── modules/     → discovered.localGroupedModules / localAutoModules
+│       ├── packages/    → discovered.packages   [ { name, path, meta, explicitSystem } ]
+│       ├── overlays/    → discovered.overlays   [ { name, path } ]
+│       ├── apps/        → discovered.apps
+│       ├── shells/      → discovered.shells
+│       ├── checks/      → discovered.checks
+│       ├── formatter/   → discovered.formatter  ( { path, meta } | null )
+│       ├── deploy/      → discovered.deploy     ( { path, meta } | null )
+│       └── lib/         → discovered.libFiles   [ { name } ]
+│
+├─ [2] 构造 overlays / pkgsFor（不求值任何主机 config）
+│
+├─ [3] 构造 nixosConfigurations（惰性；仅 nix build .#nixosConfigurations.foo 时求值）
+│
+├─ [4] 构造 homeConfigurations（惰性）
+│
+├─ [5] 构造 packages / devShells / checks / apps / formatter（惰性，per-system）
+│
+├─ [6] 构造 images（惰性；优先读 meta.images.formats，避免强制求值所有主机 config）
+│
+├─ [7] 生成框架保留 checks.*.cloud-discovery（纯 JSON 报告，不构建主机）
+│
+└─ [8] lib.recursiveUpdate generated extraOutputs
+```
+
+**关键保证**：步骤 [1] 是纯文件系统扫描，不求值任何 Nix 配置。步骤 [3]–[7] 均为惰性属性集，`nix flake show` 或查询单个 output 不会触发其他 output 的求值。
+
+---
+
+## 约定变更与兼容性
+
+| 版本 | 变更 |
+| ---- | ---- |
+| v1（当前） | 三种 package 布局并存；host dir 后缀解析 |
+| 建议 v2 | 弃用 `packages/<name>.<system>/` 旧式后缀布局；仅保留 system-first 与无后缀两种 |
+
+旧式后缀布局在 `meta.nix` 未声明 `systems` 时继续兼容，但不推荐用于新配置。
+
+---
+
+*本规范版本：v1。实现位置：`lib/discover.nix`、`lib/fs.nix`、`lib/host.nix`、`lib/default.nix`。*
