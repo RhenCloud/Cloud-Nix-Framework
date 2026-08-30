@@ -66,9 +66,9 @@ Cloud Nix Framework 是一个基于 Nix Flakes 的配置框架，用「目录约
 - `hosts/` 主机目录**必须**带 `.<system>` 后缀（`hosts/<name>.<system>/default.nix`），不猜测默认架构；key 为去后缀的 `<name>`。
 - `homes/<user>/<host>.nix` 声明该 home 关联到某主机（自动推导 `nixosConfigurations.<host>` 的 `cloud.users`，无需在 host 中手写）；`homes/<user>/default.nix` 为用户共享 home。
 - `modules/` 单树递归收集四个 magic 文件：`options.nix`（接口声明，始终注入）、`default.nix`（中性共享实现）、`nixos.nix`（NixOS 专属实现）、`home.nix`（home-manager 专属实现）。
-  - NixOS 侧加载顺序：`options.nix` → `default.nix` → `nixos.nix`
-  - home-manager 侧加载顺序：`options.nix` → `default.nix` → `home.nix`
-  - 这样保证接口声明优先加载，实现分离，避免无意中引入不相关代码。
+  - NixOS side load order：`options.nix` → `default.nix` → `nixos.nix`
+  - home-manager side load order：`options.nix` → `default.nix` → `home.nix`
+  - This ensures interface declaration loads first, separates implementation, and prevents accidentally importing unrelated code.
 - 遍历结果按**完整相对路径字典序**排序，保证模块合并顺序稳定、可复现（构建不可依赖文件系统读取次序）。
 - 模块名 = 相对路径去掉 magic 文件名、以 `.` 连接（`modules/desktop/hyprland/nixos.nix` → `desktop.hyprland`）。
 - 空目录、无 magic 文件的叶子目录会被忽略；category 层为可选组织方式，发现逻辑容忍任意深度。

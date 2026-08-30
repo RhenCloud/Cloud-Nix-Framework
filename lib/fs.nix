@@ -59,10 +59,10 @@ let
       }
     else
       let
-        # 加载顺序：options.nix → default.nix → 专属 nix
-        # options.nix 始终注入（接口声明）
-        # default.nix 为中性实现（两侧都用）
-        # nixos.nix / home.nix 为专属实现
+        # Load order: options.nix → default.nix → specialized nix
+        # options.nix is always injected (interface declaration)
+        # default.nix is neutral implementation (both sides use)
+        # nixos.nix / home.nix are specialized implementations
         magic = [
           "options.nix"
           "default.nix"
@@ -79,15 +79,30 @@ let
             folders = lib.unique (map folderOf matched);
             names = map nameOf folders;
             dups = lib.unique (lib.filter (name: lib.count (x: x == name) names > 1) names);
+            dupDetails = lib.concatMapStringsSep "\n" (
+              dupName:
+              let
+                dupFolders = lib.filter (folder: nameOf folder == dupName) folders;
+                paths = lib.concatMapStringsSep ", " (folder: dir + "/" + folder) dupFolders;
+              in
+              "  - '${dupName}': ${paths}"
+            ) dups;
           in
           if dups != [ ] then
-            throw "modules 下发现重名模块目录：${lib.concatStringsSep ", " dups}（不同路径映射到同一模块名，请重命名以避免冲突）"
+            throw ''
+              error: module discovery detected name collisions
+
+              the following module names are defined in multiple directories:
+              ${dupDetails}
+
+              hint: rename directories to ensure each module has a unique name
+            ''
           else
             lib.listToAttrs (
               map (
                 folder:
                 let
-                  # 收集该目录下的所有匹配文件，保持加载顺序
+                  # Collect all matching files in this folder, preserving load order
                   filesInFolder = lib.filter (f: folderOf f == folder) matched;
                 in
                 lib.nameValuePair (nameOf folder) (map (f: f.path) filesInFolder)
@@ -95,9 +110,9 @@ let
             );
       in
       {
-        # NixOS 侧：options.nix + default.nix + nixos.nix
+        # NixOS side: options.nix + default.nix + nixos.nix
         nixos = group (b: b == "options.nix" || b == "default.nix" || b == "nixos.nix");
-        # home 侧：options.nix + default.nix + home.nix
+        # home-manager side: options.nix + default.nix + home.nix
         home = group (b: b == "options.nix" || b == "default.nix" || b == "home.nix");
       };
 
