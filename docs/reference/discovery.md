@@ -43,19 +43,19 @@
 
 扫描范围：`hosts/` 下的**直接子目录**（不递归）。
 
-对每个子目录 `hosts/<dir>/`，按以下优先级推断 output key 与 system：
+对每个子目录 `hosts/&lt;dir&gt;/`，按以下优先级推断 output key 与 system：
 
 | 优先级 | 条件 | 结果 |
 | :----: | ---- | ---- |
-| 1 | 目录名含合法 system 后缀：`<name>.<system>`，且 `<system>` 在 `lib.systems.flakeExposed` 中 | `name = <name>`，`system = <system>` |
-| 2 | 目录名无合法后缀，但 `meta.nix` 存在且含 `system = "<system>"` | `name = <dir>`（完整目录名），`system = meta.nix.system` |
+| 1 | 目录名含合法 system 后缀：`&lt;name&gt;.&lt;system&gt;`，且 `&lt;system&gt;` 在 `lib.systems.flakeExposed` 中 | `name = &lt;name&gt;`，`system = &lt;system&gt;` |
+| 2 | 目录名无合法后缀，但 `meta.nix` 存在且含 `system = "&lt;system&gt;"` | `name = &lt;dir&gt;`（完整目录名），`system = meta.nix.system` |
 | — | 两者皆无 | `builtins.trace` 警告，跳过（不 `throw`） |
 
-**必要条件**：`hosts/<dir>/default.nix` 必须存在，否则无论何种形式均静默跳过。
+**必要条件**：`hosts/&lt;dir&gt;/default.nix` 必须存在，否则无论何种形式均静默跳过。
 
 **后缀解析细节**：
 
-- `lib.splitString "." <dir>` 后取最后一段作为候选 system。
+- `lib.splitString "." &lt;dir&gt;` 后取最后一段作为候选 system。
 - 有效要求：分段数 ≥ 2，且最后一段在 `lib.systems.flakeExposed` 中。
 - 含多个点号的目录名（FQDN 等）建议用 `meta.nix` 声明 system，避免最后一段恰好匹配已知 system 的意外情形。
 
@@ -112,31 +112,31 @@ homes/<user>/
             └── <host2>.nix   →  homeConfigurations."<user>@<host2>"
             ```
             
-- `<host>` 必须与 `hosts/` 中已发现的某主机 name 完全一致，否则该文件被忽略（不报错）。
-- `default.nix` 专用于全局 home，不会生成 `<user>@default` output。
-- 同一用户目录下可同时存在 `default.nix` 与若干 `<host>.nix`，互不冲突。
-- 子目录遍历**不递归**；`homes/<user>/sub/foo.nix` 会被忽略。
+- `&lt;host&gt;` 必须与 `hosts/` 中已发现的某主机 name 完全一致，否则该文件被忽略（不报错）。
+- `default.nix` 专用于全局 home，不会生成 `&lt;user&gt;@default` output。
+- 同一用户目录下可同时存在 `default.nix` 与若干 `&lt;host&gt;.nix`，互不冲突。
+- 子目录遍历**不递归**；`homes/&lt;user&gt;/sub/foo.nix` 会被忽略。
 
 ### Output 映射
 
 | 文件 | output key | system 来源 |
 | ---- | ---------- | ----------- |
-| `homes/<user>/default.nix` | `homeConfigurations.<user>` | `mkFlake` 的 `systems` 首项 |
-| `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` | 对应主机目录的 system |
+| `homes/&lt;user&gt;/default.nix` | `homeConfigurations.&lt;user&gt;` | `mkFlake` 的 `systems` 首项 |
+| `homes/&lt;user&gt;/&lt;host&gt;.nix` | `homeConfigurations."&lt;user&gt;@&lt;host&gt;"` | 对应主机目录的 system |
 
 ::: warning 全局 home 的 system
 
-`homeConfigurations.<user>` 使用 `systems` 的第一个元素作为 system。若 `systems` 含多个架构，全局 home 将只对第一个架构有效。需要多架构全局 home 时，建议将用户明确关联到各架构的主机（通过 `<host>.nix`），或在 `homes/<user>/meta.nix` 中声明 `system`（待实现）。
+`homeConfigurations.&lt;user&gt;` 使用 `systems` 的第一个元素作为 system。若 `systems` 含多个架构，全局 home 将只对第一个架构有效。需要多架构全局 home 时，建议将用户明确关联到各架构的主机（通过 `&lt;host&gt;.nix`），或在 `homes/&lt;user&gt;/meta.nix` 中声明 `system`（待实现）。
 
 :::
     
     ### 自动嵌入 NixOS
         
-    当 `homes/<user>/<host>.nix` 存在时：
+    当 `homes/&lt;user&gt;/&lt;host&gt;.nix` 存在时：
     
-1. 框架将 `<user>` 写入 `nixosConfigurations.<host>` 的 `config.cloud.users`。
-2. 若该主机的 `embedHomeManager` 为 `true`，框架自动注入 `home-manager.users.<user>` 模块（无需在主机模块中手写 `home-manager.users`）。
-3. 若 `embedHomeManager` 为 `false`，仅生成独立的 `homeConfigurations."<user>@<host>"`，不嵌入 NixOS。
+1. 框架将 `&lt;user&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.cloud.users`。
+2. 若该主机的 `embedHomeManager` 为 `true`，框架自动注入 `home-manager.users.&lt;user&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
+3. 若 `embedHomeManager` 为 `false`，仅生成独立的 `homeConfigurations."&lt;user&gt;@&lt;host&gt;"`，不嵌入 NixOS。
 
 ### 模块注入顺序（独立 home）
 
@@ -202,7 +202,7 @@ nixosModules.<name>   →  { imports = [ <所有属于该目录组的 NixOS 侧�
 homeModules.<name>    →  { imports = [ <所有属于该目录组的 HM 侧路径> ]; }
 ```
 
-`<name>` 即上述模块名（点分路径）。
+`&lt;name&gt;` 即上述模块名（点分路径）。
 
 ### meta.nix 字段（modules）
 
@@ -217,16 +217,16 @@ modules 目录当前不读取 `meta.nix`；过滤通过主机的角色声明完�
 
 | 布局 | 目录约定 | system 来源 | 推荐程度 |
 | ---- | -------- | ----------- | -------- |
-| **system-first**（推荐） | `packages/<system>/<name>/default.nix` | 目录名即 system | ★★★ |
-| **无后缀**（跨平台） | `packages/<name>/default.nix` | 所有 `systems` | ★★★ |
-| **后缀兼容**（旧式） | `packages/<name>.<system>/default.nix` | 目录后缀解析 | ★（已不推荐） |
+| **system-first**（推荐） | `packages/&lt;system&gt;/&lt;name&gt;/default.nix` | 目录名即 system | ★★★ |
+| **无后缀**（跨平台） | `packages/&lt;name&gt;/default.nix` | 所有 `systems` | ★★★ |
+| **后缀兼容**（旧式） | `packages/&lt;name&gt;.&lt;system&gt;/default.nix` | 目录后缀解析 | ★（已不推荐） |
 
 **解析优先级（system-first 优先）**：
 
-对 `packages/` 下的一级目录 `<dir>`：
+对 `packages/` 下的一级目录 `&lt;dir&gt;`：
 
-1. 若 `<dir>` 本身有 `default.nix`，归为"无后缀"或"后缀兼容"布局。
-2. 若 `<dir>` 没有 `default.nix`，将 `<dir>` 视为 system 名，递归发现其子目录作为 system-first 包。
+1. 若 `&lt;dir&gt;` 本身有 `default.nix`，归为"无后缀"或"后缀兼容"布局。
+2. 若 `&lt;dir&gt;` 没有 `default.nix`，将 `&lt;dir&gt;` 视为 system 名，递归发现其子目录作为 system-first 包。
 
 这意味着 system-first 与无后缀布局**不能共用同一个一级目录名**：若 `packages/x86_64-linux/` 下存在 `default.nix`，该目录被视为包而不是 system 前缀。
 
@@ -269,7 +269,7 @@ packages/<name>.<system>/default.nix   →  packages.<system>.<name>   （旧式
 
 扫描范围：`overlays/` 下的**直接子目录**。
 
-必要条件：`overlays/<name>/default.nix` 存在。
+必要条件：`overlays/&lt;name&gt;/default.nix` 存在。
 
 ### Output 映射
 
@@ -386,7 +386,7 @@ mkFlake 调用
 | 版本 | 变更 |
 | ---- | ---- |
 | v1（当前） | 三种 package 布局并存；host dir 后缀解析 |
-| 建议 v2 | 弃用 `packages/<name>.<system>/` 旧式后缀布局；仅保留 system-first 与无后缀两种 |
+| 建议 v2 | 弃用 `packages/&lt;name&gt;.&lt;system&gt;/` 旧式后缀布局；仅保留 system-first 与无后缀两种 |
 
 旧式后缀布局在 `meta.nix` 未声明 `systems` 时继续兼容，但不推荐用于新配置。
 
