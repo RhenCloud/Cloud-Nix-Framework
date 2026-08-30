@@ -62,7 +62,7 @@ let
           embed = lib.mkOption {
             type = lib.types.nullOr lib.types.bool;
             default = null;
-            description = "仅供声明式检查用；实际嵌入策略由 meta.nix.embedHomeManager 或 mkFlake.embedHomeManager 控制";
+            description = "仅读取用；实际嵌入策略由 hosts/<host>/meta.nix 的 home.embed 字段或 mkFlake 的 embedHomeManager 参数控制";
           };
         };
       };
@@ -219,22 +219,6 @@ let
         ++ ownDefault
         ++ ownHost;
 
-      frameworkMetadataKeys = [
-        "role"
-        "roles"
-        "embedHomeManager"
-        "homeManagerUseGlobalPkgs"
-        "homeManager"
-      ];
-      stripMeta =
-        hostRaw:
-        if builtins.isFunction hostRaw then
-          lib.setFunctionArgs (args: builtins.removeAttrs (hostRaw args) frameworkMetadataKeys) (
-            builtins.functionArgs hostRaw
-          )
-        else
-          builtins.removeAttrs hostRaw frameworkMetadataKeys;
-
       mkSystem =
         {
           host,
@@ -283,7 +267,7 @@ let
             };
           };
 
-          hostMod = stripMeta (import hostModule);
+          hostMod = import hostModule;
           hostModules =
             filterRoles roles discovered.localAutoModules.nixos
             ++ discovered.registryModules.nixos

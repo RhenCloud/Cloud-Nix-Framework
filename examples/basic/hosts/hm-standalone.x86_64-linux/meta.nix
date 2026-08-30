@@ -1,4 +1,4 @@
 {
   roles = [ "server" ];
-  embedHomeManager = false;
+  home.embed = false;
 }

@@ -72,13 +72,14 @@ embedHomeManager = {
 }
 ```
 
-也可在 `meta.nix` 顶层使用等价字段：
+主机 `meta.nix` 请使用规范字段（`embedHomeManager`/`homeManagerUseGlobalPkgs` 为 mkFlake 全局参数，在 meta.nix 中已弃用）：
 
 ```nix
+# hosts/yc-hk-1.x86_64-linux/meta.nix
 {
-  role = "server";
-  embedHomeManager = false;
-  homeManagerUseGlobalPkgs = false;
+  roles = [ "server" ];
+  home.embed = false;
+  home.useGlobalPkgs = false;
 }
 ```
 

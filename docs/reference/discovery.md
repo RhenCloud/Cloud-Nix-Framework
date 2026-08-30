@@ -74,10 +74,12 @@ hosts/<name>.<system>/meta.nix      →  （仅元数据，不直接生成 outpu
 | `system` | `string` | — | 架构标识符（目录名无后缀时使用） |
 | `role` | `string` | `null` | 角色过滤标签（单值），与 `roles` 互为别名 |
 | `roles` | `[string]` | `null` | 角色过滤标签（多值），`null` 表示不过滤 |
-| `embedHomeManager` | `bool` | `null` | 是否将关联 home 嵌入此主机（`null` 表示继承全局策略） |
-| `homeManagerUseGlobalPkgs` | `bool` | `null` | 嵌入式 HM 是否复用 NixOS pkgs（`null` 表示继承全局策略） |
-| `homeManager.embed` | `bool` | `null` | `embedHomeManager` 的等价写法，两者不能同时出现 |
-| `homeManager.useGlobalPkgs` | `bool` | `null` | `homeManagerUseGlobalPkgs` 的等价写法 |
+| `home.embed` | `bool` | `null` | 是否将关联 home 嵌入此主机（`null` 表示继承全局策略） |
+| `home.useGlobalPkgs` | `bool` | `null` | 嵌入式 HM 是否复用 NixOS pkgs（`null` 表示继承全局策略） |
+| `embedHomeManager` | `bool` | `null` | **已弃用**，请使用 `home.embed` |
+| `homeManagerUseGlobalPkgs` | `bool` | `null` | **已弃用**，请使用 `home.useGlobalPkgs` |
+| `homeManager.embed` | `bool` | `null` | **已弃用**，请使用 `home.embed` |
+| `homeManager.useGlobalPkgs` | `bool` | `null` | **已弃用**，请使用 `home.useGlobalPkgs` |
 | `images.formats` | `[string]` | `[]` | 需要生成的镜像变体（如 `["iso"]`），在发现阶段读取，优先于模块 config |
 
 **优先级（高 → 低）**：`meta.nix` 字段 > `mkFlake` 全局参数 > 框架硬编码默认值。
@@ -107,11 +109,11 @@ hosts/<name>.<system>/meta.nix      →  （仅元数据，不直接生成 outpu
 
 ```
 homes/<user>/
-    ├── default.nix   →  homeConfigurations.<user>       （全局/共享 home）
-        ├── <host>.nix    →  homeConfigurations."<user>@<host>"  （主机关联 home）
-            └── <host2>.nix   →  homeConfigurations."<user>@<host2>"
-            ```
-            
+├── default.nix      →  homeConfigurations.<user>            （全局/共享 home）
+├── <host>.nix       →  homeConfigurations."<user>@<host>"   （主机关联 home）
+└── <host2>.nix      →  homeConfigurations."<user>@<host2>"  （主机关联 home）
+```
+
 - `&lt;host&gt;` 必须与 `hosts/` 中已发现的某主机 name 完全一致，否则该文件被忽略（不报错）。
 - `default.nix` 专用于全局 home，不会生成 `&lt;user&gt;@default` output。
 - 同一用户目录下可同时存在 `default.nix` 与若干 `&lt;host&gt;.nix`，互不冲突。
@@ -135,8 +137,8 @@ homes/<user>/
     当 `homes/&lt;user&gt;/&lt;host&gt;.nix` 存在时：
     
 1. 框架将 `&lt;user&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.cloud.users`。
-2. 若该主机的 `embedHomeManager` 为 `true`，框架自动注入 `home-manager.users.&lt;user&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
-3. 若 `embedHomeManager` 为 `false`，仅生成独立的 `homeConfigurations."&lt;user&gt;@&lt;host&gt;"`，不嵌入 NixOS。
+2. 若该主机的 `home.embed` 为 `true`，框架自动注入 `home-manager.users.&lt;user&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
+3. 若 `home.embed` 为 `false`，仅生成独立的 `homeConfigurations."&lt;user&gt;@&lt;host&gt;"`，不嵌入 NixOS。
 
 ### 模块注入顺序（独立 home）
 

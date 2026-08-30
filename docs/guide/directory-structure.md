@@ -73,14 +73,14 @@
 {
   roles = [ "server" ];
 
-  homeManager = {
+  home = {
     embed = false;
     useGlobalPkgs = false;
   };
 }
 ```
 
-也可使用等价的顶层字段 `embedHomeManager` 与 `homeManagerUseGlobalPkgs`；角色同时支持单字符串 `role`。主机元数据优先于 `mkFlake` 的全局策略。
+角色同时支持单字符串 `role`（与 `roles` 互为别名）。主机元数据优先于 `mkFlake` 的全局策略。旧字段 `embedHomeManager`、`homeManagerUseGlobalPkgs`、`homeManager.embed`、`homeManager.useGlobalPkgs` 仍兼容，但已弃用，会输出 trace 警告。
 
 `meta.nix` 必须直接返回属性集，不是 NixOS module，也不会收到 `config` 等模块参数。框架读取它以后，`default.nix` 只由 NixOS module system 正式求值，可以在外层安全使用真实 `config`：
 
@@ -94,14 +94,14 @@
 }
 ```
 
-旧的 `default.nix` 顶层 `role`、`roles`、`embedHomeManager` 和 `homeManagerUseGlobalPkgs` 继续兼容，但需要一次兼容性探测。函数式 host module 若在探测阶段依赖真实 `config`，框架会给出迁移警告、关闭角色过滤，并让主机级 Home Manager 策略回退到全局值；新配置应使用 `meta.nix`。
+`default.nix` 是纯 NixOS 模块，不再被框架解析框架元数据。新配置请始终使用 `meta.nix` 声明角色和框架策略。
 
 ## 主机与 home 自动关联
 
 - 主机架构来自 `hosts/<name>.<system>/` 的目录后缀。
 - `homes/<user>/<host>.nix` 自动把用户关联到该主机，并生成 `homeConfigurations."<user>@<host>"`。
 - `homes/<user>/default.nix` 是共享 home，并生成 `homeConfigurations.<user>`。
-- `homeManager.embed = false` 只关闭该主机的嵌入式 HM，独立 home output 仍然保留。
+- `home.embed = false` 只关闭该主机的嵌入式 HM，独立 home output 仍然保留。
 
 全局也可使用 per-host 策略：
 

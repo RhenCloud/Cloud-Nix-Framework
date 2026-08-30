@@ -16,20 +16,71 @@ let
     else
       throw "主机 role/roles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf roles}";
 
+  # 读取一个 bool? 字段，支持新旧两种路径
+  # newPath: 新推荐路径（如 raw.home.embed）
+  # oldPaths: 旧路径列表 { value; name; } 带 deprecated 警告
+  readBoolField =
+    {
+      newValue,
+      oldPaths,
+    }:
+    if newValue != null then
+      newValue
+    else
+      lib.foldl' (
+        acc: old:
+        if acc != null then
+          acc
+        else if old.value != null then
+          builtins.trace "警告：meta.nix 字段 '${old.name}' 已弃用，请迁移到 '${old.newName}'" old.value
+        else
+          null
+      ) null oldPaths;
+
   normalizeHostMetadata =
     raw:
     let
-      homeManagerMeta = raw.homeManager or { };
-      fromConfig =
-        if raw ? config && builtins.isAttrs raw.config && !(builtins.isFunction raw.config) then
-          raw.config.cloud.roles or raw.config.cloud.role or null
-        else
-          null;
+      homeMeta = raw.home or { };
+      # 旧式扁平字段
+      oldEmbed = raw.embedHomeManager or null;
+      oldUseGlobalPkgs = raw.homeManagerUseGlobalPkgs or null;
+      # 旧式 homeManager.* 嵌套字段
+      oldHmMeta = raw.homeManager or { };
+      oldHmEmbed = oldHmMeta.embed or null;
+      oldHmUseGlobalPkgs = oldHmMeta.useGlobalPkgs or null;
     in
     {
-      roles = normalizeRoles (raw.roles or raw.role or fromConfig);
-      embedHomeManager = raw.embedHomeManager or homeManagerMeta.embed or null;
-      homeManagerUseGlobalPkgs = raw.homeManagerUseGlobalPkgs or homeManagerMeta.useGlobalPkgs or null;
+      roles = normalizeRoles (raw.roles or raw.role or null);
+      embedHomeManager = readBoolField {
+        newValue = homeMeta.embed or null;
+        oldPaths = [
+          {
+            value = oldEmbed;
+            name = "embedHomeManager";
+            newName = "home.embed";
+          }
+          {
+            value = oldHmEmbed;
+            name = "homeManager.embed";
+            newName = "home.embed";
+          }
+        ];
+      };
+      homeManagerUseGlobalPkgs = readBoolField {
+        newValue = homeMeta.useGlobalPkgs or null;
+        oldPaths = [
+          {
+            value = oldUseGlobalPkgs;
+            name = "homeManagerUseGlobalPkgs";
+            newName = "home.useGlobalPkgs";
+          }
+          {
+            value = oldHmUseGlobalPkgs;
+            name = "homeManager.useGlobalPkgs";
+            newName = "home.useGlobalPkgs";
+          }
+        ];
+      };
     };
 
   resolveHost =
@@ -51,29 +102,9 @@ let
     if hasMeta then
       normalizeHostMetadata hostRec.meta
     else
-      let
-        hostArgs = {
-          inherit lib pkgs;
-          config = null;
-          options = null;
-          modules = null;
-          name = null;
-        };
-        attempt = builtins.tryEval (
-          let
-            imported = import hostRec.path;
-            mod = if builtins.isFunction imported then imported hostArgs else imported;
-            metadata = normalizeHostMetadata mod;
-          in
-          builtins.deepSeq metadata metadata
-        );
-      in
-      if attempt.success then
-        attempt.value
-      else
-        builtins.trace "警告：主机 '${host}' 的旧式顶层元数据探测失败，角色过滤已关闭；请迁移到 hosts/${hostRec.dir}/meta.nix" (
-          normalizeHostMetadata { }
-        );
+      builtins.trace "警告：主机 '${host}' 缺少 meta.nix，角色过滤已关闭；建议创建 hosts/${hostRec.dir}/meta.nix" (
+        normalizeHostMetadata { }
+      );
 
   resolveHostPolicy =
     {
