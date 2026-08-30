@@ -51,6 +51,7 @@ let
     in
     {
       roles = normalizeRoles (raw.roles or raw.role or null);
+      modules = raw.modules or { };
       embedHomeManager = readBoolField {
         newValue = homeMeta.embed or null;
         oldPaths = [

@@ -12,6 +12,7 @@
 let
   fs = import ./fs.nix { inherit lib; };
   patches = import ./patches.nix;
+  moduleTools = import ./internal/modules.nix { inherit lib; };
 
   defaultSystems = [
     "x86_64-linux"
@@ -22,10 +23,10 @@ let
 
   version = {
     major = 0;
-    minor = 3;
+    minor = 4;
     patch = 0;
     pre = "dev";
-    string = "0.3.0-dev";
+    string = "0.4.0-dev";
   };
 
   renderOptions =
@@ -217,6 +218,16 @@ let
           p: isDefaultFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
         ) paths;
 
+      applyModuleOverridesToPath =
+        { overrideMap, paths }:
+        if overrideMap == { } then
+          paths
+        else
+          moduleTools.applyModuleOverrides {
+            overrides = overrideMap;
+            modules = paths;
+          };
+
       homeModulesFor =
         {
           user,
@@ -264,7 +275,7 @@ let
           users = usersForHost host;
 
           metadata = hostMeta.hostMetadataFor { inherit host pkgs; };
-          inherit (metadata) roles;
+          inherit (metadata) roles modules;
           embedForHost = hostMeta.hostPolicyFromMetadata {
             inherit metadata host;
             key = "embedHomeManager";
@@ -286,11 +297,20 @@ let
             };
           };
 
+          validatedModuleOverrides = moduleTools.validateModuleOverrides modules;
+
           hostMod = import hostModule;
           hostModules =
-            filterRoles roles discovered.localAutoModules.nixos
-            ++ discovered.registryModules.nixos
-            ++ [ hostMod ];
+            let
+              baseModules =
+                filterRoles roles discovered.localAutoModules.nixos
+                ++ discovered.registryModules.nixos
+                ++ [ hostMod ];
+            in
+            applyModuleOverridesToPath {
+              overrideMap = validatedModuleOverrides;
+              paths = baseModules;
+            };
 
           embedModule =
             { config, lib, ... }:
@@ -378,6 +398,9 @@ let
             inherit nixpkgsConfig extraOverlays;
           };
           roles = if host == null then null else hostMeta.rolesFor { inherit host pkgs; };
+          metadata = if host == null then null else hostMeta.hostMetadataFor { inherit host pkgs; };
+          validatedModuleOverridesHome =
+            if metadata == null then { } else moduleTools.validateModuleOverrides metadata.modules;
         in
         hmLib.homeManagerConfiguration {
           inherit pkgs;
@@ -385,7 +408,18 @@ let
           modules = [
             optionsCloudHome
           ]
-          ++ homeModulesFor { inherit user host roles; }
+          ++ (
+            let
+              baseHomeModules = homeModulesFor { inherit user host roles; };
+            in
+            if validatedModuleOverridesHome == { } then
+              baseHomeModules
+            else
+              applyModuleOverridesToPath {
+                overrideMap = validatedModuleOverridesHome;
+                paths = baseHomeModules;
+              }
+          )
           ++ modules
           ++ extraModules
           ++ extraHomeModules;

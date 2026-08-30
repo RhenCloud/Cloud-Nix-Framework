@@ -573,3 +573,25 @@ nix flake check path:. --show-trace
 ## 许可证
 
 MIT
+
+### 细粒度模块控制
+
+从 0.4.0 起，可在 `hosts/<name>/meta.nix` 中通过 `modules` 字段禁用特定模块：
+
+```nix
+# hosts/laptop/meta.nix
+{
+  system = "x86_64-linux";
+  roles = [ "desktop" ];
+  
+  modules = {
+    "desktop.gaming" = false;        # 禁用游戏配置
+    "development.cuda" = false;      # 禁用 CUDA 支持
+  };
+}
+```
+
+模块名称对应目录结构（用点号分隔）。设置为 `false` 禁用模块，`true` 显式启用（无需通常设置）。
+
+详见 [细粒度模块控制指南](./docs/guide/module-overrides.md)。
+
