@@ -10,7 +10,7 @@
 | | flake.parts | Cloud Nix Framework |
 | ---- | ---- | ---- |
 | 范式 | 显式模块组合 | 目录约定自动发现 |
-| 扩展方式 | flakeModule | 约定目录 + extraOutputs |
+| 扩展方式 | flakeModule | 约定目录 + outputs.extra |
 | 目录发现 | 可选（autowiring） | 核心特性 |
 | NixOS + HM 集成 | 需要组合模块 | 内置 |
 
@@ -28,13 +28,13 @@
 
 ## 混合使用
 
-CNF 可以通过 `extraOutputs` 与 flake.parts 产出并存，无需完整迁移：
+CNF 可以通过 `outputs.extra` 与 flake.parts 产出并存，无需完整迁移：
 
 ```nix
 outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
-    extraOutputs = {
+    outputs.extra = {
       # 从 flake.parts 迁移过来的其他 outputs
     };
   };

@@ -79,21 +79,21 @@
 - `inputs`：全部 flake inputs；
 - `channels`：当前 `nixpkgs` 的预留解析入口；
 - `self`：当前用户 flake；
-- `cloud`：`patches`、`sops` 等框架 helper；
-- `extraSpecialArgs` 中的自定义参数；
+- `cloud`：`patches`、`sops`、`version` 等精简框架 helper；
+- `nixos.specialArgs` 或 `home.specialArgs` 中对应模块系统的自定义参数；
 - 模块系统原生参数，如 `config`、`pkgs`、`lib`、`options`。
 
 嵌入式 home-manager 的自定义参数写入 `home-manager.extraSpecialArgs`，与独立 HM 行为一致。
 
 ## 额外模块
 
-- `extraModules`：进入每台 NixOS 主机和每个 home。
-- `extraNixosModules`：仅进入 NixOS。
-- `extraHomeModules`：进入独立与嵌入式 home-manager。
+- `nixos.modules`：仅进入 NixOS。
+- `home.modules`：进入独立与嵌入式 Home Manager。
+- 两侧共享的模块应显式加入两个列表。旧的 `extraModules`、`extraNixosModules` 与 `extraHomeModules` 仍兼容，但已弃用。
 
 ## 公共模块与嵌入式 home-manager 的注意事项
 
-`modules/_common/` 下的 `nixos.nix` 文件会注入**所有** NixOS 主机，包括禁用了 HM 嵌入（`embedHomeManager = false`）的主机。
+`modules/_common/` 下的 `nixos.nix` 文件会注入**所有** NixOS 主机，包括禁用了 HM 嵌入（`home.embed = false`）的主机。
 
 **不要**在公共 `nixos.nix` 模块中直接引用 `home-manager.*` option（如 `home-manager.backupFileExtension`、`home-manager.users` 等）——这些 option 由 home-manager NixOS 模块提供，仅当该主机启用了 HM 嵌入时才存在。在禁用嵌入的主机上求值会报"undefined option"错误。
 

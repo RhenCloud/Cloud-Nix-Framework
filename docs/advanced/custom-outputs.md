@@ -1,15 +1,15 @@
 # 自定义 Outputs
 
-## extraOutputs
+## outputs.extra
 
-不适合目录约定的 outputs 可通过 `extraOutputs` 添加：
+不适合目录约定的 outputs 可通过 `outputs.extra` 添加：
 
 ```nix
 outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
 
-    extraOutputs = {
+    outputs.extra = {
       # 标准 flake outputs
       hydraJobs = { };
       darwinConfigurations.my-mac = { };
@@ -20,7 +20,7 @@ outputs = inputs:
   };
 ```
 
-`extraOutputs` 通过 `lib.recursiveUpdate` 与框架生成的 outputs 合并，同名 key 由 `extraOutputs` 覆盖。
+`outputs.extra` 通过 `lib.recursiveUpdate` 与框架生成的 outputs 合并，同名 key 由 `outputs.extra` 覆盖。
 
 ## 非标准 outputs 警告
 
@@ -33,7 +33,7 @@ nix flake check path:. --show-trace
 nix flake check path:. --all-systems --show-trace  # 检查全部架构
 ```
 
-## expectedOutputs 期望校验
+## outputs.expected 期望校验
 
 在 `mkFlake` 中声明期望的 output 列表，框架会在 `cloud-discovery` check 中验证：
 
@@ -41,7 +41,7 @@ nix flake check path:. --all-systems --show-trace  # 检查全部架构
 inputs.cloud.lib.mkFlake {
   inherit inputs;
 
-  expectedOutputs = {
+  outputs.expected = {
     hosts = [ "nixos-desktop" "nixos-server" "yc-hk-1" ];
     homes = [ "rhencloud@nixos-desktop" ];
     packages = [ "hello" ];
@@ -56,7 +56,7 @@ inputs.cloud.lib.mkFlake {
 对于不符合目录约定的特殊主机：
 
 ```nix
-extraOutputs = {
+outputs.extra = {
   nixosConfigurations.special = cloud.mkSystem {
     host = "special";
     system = "x86_64-linux";

@@ -37,7 +37,7 @@ nixfmt
 nix fmt
 ```
 
-formatter 与 packages、checks 等使用同一套 `nixpkgsConfig` 和 overlays。
+formatter 与 packages、checks 等使用同一套 `nixpkgs.config` 和 overlays。
 
 ## Deploy
 
@@ -55,13 +55,13 @@ formatter 与 packages、checks 等使用同一套 `nixpkgsConfig` 和 overlays�
 
 ## 禁用自动发现的 output
 
-`disabledOutputs` 在调用 output 文件前过滤条目，适合临时关闭损坏或昂贵的 check：
+`outputs.disabled` 在调用 output 文件前过滤条目，适合临时关闭损坏或昂贵的 check：
 
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
 
-  disabledOutputs = [
+  outputs.disabled = [
     "checks.eval-nixos-desktop"
     "checks.aarch64-linux.only-broken-there"
     "packages.some-package"
@@ -77,13 +77,13 @@ inputs.cloud.lib.mkFlake {
 也可使用分类属性集：
 
 ```nix
-disabledOutputs = {
+outputs.disabled = {
   checks = [ "eval-nixos-desktop" ];
   packages = [ "some-package" ];
 };
 ```
 
-`disabledOutputs` 只控制框架自动发现的条目；`extraOutputs` 仍可显式添加同名 output。
+`outputs.disabled` 只控制框架自动发现的条目；`outputs.extra` 仍可显式添加同名 output。
 
 ## Output 元数据
 
@@ -154,12 +154,12 @@ nix flake check path:. --all-systems --show-trace
 
 ## 其他 outputs
 
-不适合目录约定的 outputs 可继续使用 `extraOutputs`：
+不适合目录约定的 outputs 可使用 `outputs.extra`：
 
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  extraOutputs = {
+  outputs.extra = {
     hydraJobs = { };
   };
 }

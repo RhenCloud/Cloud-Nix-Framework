@@ -58,27 +58,28 @@ outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
 
-    nixpkgsConfig = {
-      allowUnfree = true;
-      permittedInsecurePackages = [ "example-1.0" ];
+    nixpkgs = {
+      config = {
+        allowUnfree = true;
+        permittedInsecurePackages = [ "example-1.0" ];
+      };
+      overlays = [
+        (final: prev: {
+          # 在自动发现 overlays 之后应用
+        })
+      ];
     };
-
-    extraOverlays = [
-      (final: prev: {
-        # 在自动发现 overlays 之后应用
-      })
-    ];
   };
 ```
 
 框架不再让自动发现的 package 单独使用未经配置的 `nixpkgs.legacyPackages`，从而避免 NixOS、home-manager 与其他 outputs 的包集合不一致。
 
-嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。若 Stylix 等 HM 模块需要设置自己的 overlay，可全局或按主机设置 `homeManagerUseGlobalPkgs = false`。框架会把基础 `nixpkgsConfig` 与 overlays 注入 HM 自己的 nixpkgs，避免丢失统一配置：
+嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。若 Stylix 等 HM 模块需要设置自己的 overlay，可全局或按主机设置 `home.useGlobalPkgs = false`。框架会把基础 `nixpkgs.config` 与 overlays 注入 HM 自己的 nixpkgs，避免丢失统一配置：
 
 ```nix
 # hosts/nixos-desktop.x86_64-linux/meta.nix
 {
-  homeManager.useGlobalPkgs = false;
+  home.useGlobalPkgs = false;
 }
 ```
 
@@ -88,7 +89,7 @@ Stylix 的某些模块（`nixos-icons`、`gtksourceview`）会在 HM 侧设置 o
 
 > You have set either nixpkgs.config or nixpkgs.overlays while using home-manager.useGlobalPkgs. This will soon not be possible.
 
-此警告来自 Stylix 本身，不是框架重复配置。如需消除警告，请对包含 Stylix 的主机设置 `homeManager.useGlobalPkgs = false`。
+此警告来自 Stylix 本身，不是框架重复配置。如需消除警告，请对包含 Stylix 的主机设置 `home.useGlobalPkgs = false`。
 
 :::
 

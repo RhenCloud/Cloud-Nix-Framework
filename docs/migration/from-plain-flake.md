@@ -90,7 +90,7 @@ outputs = inputs:
   in
   inputs.cloud.lib.mkFlake {
     inherit inputs;
-    extraOutputs = {
+    outputs.extra = {
       nixosConfigurations.special-host = cloud.mkSystem {
         host = "special-host";
         system = "x86_64-linux";

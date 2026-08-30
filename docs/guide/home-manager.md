@@ -28,7 +28,7 @@ outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
 
-    embedHomeManager = {
+    home.embed = {
       default = true;
       hosts.yc-hk-1 = false;  # 该主机不嵌入
     };
@@ -81,7 +81,7 @@ outputs = inputs:
 }
 ```
 
-框架关闭后会自动将 `nixpkgsConfig` 与 overlays 注入 HM 自己的 nixpkgs，维持统一配置。
+框架关闭后会自动将 `nixpkgs.config` 与 overlays 注入 HM 自己的 nixpkgs，维持统一配置。
 
 ## 独立 HM 切换
 

@@ -118,50 +118,63 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 
 ### `mkFlake`
 
-顶层 outputs 构造器，自动扫描目录并拼接全部 outputs：
+顶层 outputs 构造器，自动扫描目录并拼接全部 outputs。0.3.0 起推荐按职责使用嵌套命名空间：
 
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
   root = ./.;
   systems = [ "x86_64-linux" "aarch64-linux" ];
-  extraOutputs = { };
-  extraSpecialArgs = { };
-  extraModules = [ ];
-  extraNixosModules = [ ];
-  extraHomeModules = [ ];
-  nixpkgsConfig = { allowUnfree = true; };
-  extraOverlays = [ ];
-  embedHomeManager = true;
-  homeManagerUseGlobalPkgs = true;
-  disabledOutputs = [ ];
+
+  nixpkgs = {
+    config = { allowUnfree = true; };
+    overlays = [ ];
+  };
+
+  nixos = {
+    modules = [ ];
+    specialArgs = { };
+  };
+
+  home = {
+    modules = [ ];
+    specialArgs = { };
+    embed = true;
+    useGlobalPkgs = true;
+  };
+
+  outputs = {
+    extra = { };
+    disabled = [ ];
+    expected = { };
+  };
+
   moduleRegistries = [ ];
 }
 ```
 
 - `root`：配置仓库根目录，通常从调用位置自动推导。
 - `systems`：生成 per-system outputs 的架构列表。
-- `extraOutputs`：与自动生成 outputs 深度合并。
-- `extraSpecialArgs`：注入 NixOS、独立 HM 和嵌入式 HM。
-- `extraModules`：同时追加到每台 NixOS 主机和每个 home。
-- `extraNixosModules` / `extraHomeModules`：仅追加到对应一侧。
-- `nixpkgsConfig`：统一设置 `allowUnfree`、`permittedInsecurePackages` 等配置。
-- `extraOverlays`：在自动发现 overlays 之后追加。
-- `embedHomeManager`：控制是否嵌入关联 home，支持 bool、`host: bool` 和 per-host 属性集。
-- `homeManagerUseGlobalPkgs`：控制嵌入式 HM 是否复用 NixOS `pkgs`，同样支持按主机配置。
-- `disabledOutputs`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
+- `nixpkgs.config` / `nixpkgs.overlays`：统一配置所有 nixpkgs 实例。
+- `nixos.modules` / `nixos.specialArgs`：仅注入 NixOS。
+- `home.modules` / `home.specialArgs`：注入独立与嵌入式 Home Manager。
+- `home.embed`：控制是否嵌入关联 home，支持 bool、`host: bool` 和 per-host 属性集。
+- `home.useGlobalPkgs`：控制嵌入式 HM 是否复用 NixOS `pkgs`，同样支持按主机配置。
+- `outputs.extra`：与自动生成 outputs 深度合并。
+- `outputs.disabled`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
+- `outputs.expected`：校验期望发现的 hosts、homes、packages 与 apps。
 - `moduleRegistries`：按需并入外部模块注册表。
 
 ```nix
-embedHomeManager = {
+home.embed = {
   default = true;
   hosts.yc-hk-1 = false;
 };
 
-homeManagerUseGlobalPkgs = host: host != "nixos-desktop";
+home.useGlobalPkgs = host: host != "nixos-desktop";
 ```
 
-主机 `meta.nix` 中的 `homeManager.embed` / `homeManager.useGlobalPkgs` 优先于全局策略。也可使用等价的顶层字段 `embedHomeManager` / `homeManagerUseGlobalPkgs`。
+主机 `meta.nix` 中的 `home.embed` / `home.useGlobalPkgs` 优先于全局策略。旧的扁平 `mkFlake` 参数仍兼容，但会输出弃用 trace；迁移表见[版本策略](./docs/reference/versioning.md)。
 
 ### `mkSystem`
 
@@ -217,16 +230,17 @@ outputs = inputs:
 
 > ⚠️ **全局 home 的构建架构**：`mkFlake` 生成 `homeConfigurations.<user>` 时默认取 `systems` 首项。若本机架构不是首项，请调整顺序或用 `mkHome { system = "aarch64-linux"; }` 显式声明。
 
-### `mkLib` / 自动发现函数 / patch 与 sops helper
+### `mkLib` / 版本 / 自动发现函数 / patch 与 sops helper
 
 - `mkLib { inherit inputs; }` 返回已绑定当前 flake 的 `cloud` 命名空间。
+- `version` 返回 `{ major; minor; patch; pre; string; }`，当前为 `0.3.0-dev`；完整策略见[版本策略](./docs/reference/versioning.md)。
 - `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数，按完整相对路径字典序稳定遍历。
 - `cloud.patches.local` / `cloud.patches.fromPR` 提供 patch helper。
 - `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
 
 ### 注入的模块参数
 
-所有模块（NixOS、独立 home-manager 与嵌入式 home-manager）均自动获得：`inputs`、`channels`、`self`、`cloud`，以及对应模块系统的原生参数。`extraSpecialArgs` 会合并到这组参数中。
+所有模块（NixOS、独立 home-manager 与嵌入式 home-manager）均自动获得：`inputs`、`channels`、`self`、`cloud`，以及对应模块系统的原生参数。`nixos.specialArgs` 与 `home.specialArgs` 分别注入对应模块系统；旧的 `extraSpecialArgs` 仍作为两侧共同参数兼容。
 
 ### 求值模型
 
@@ -236,7 +250,7 @@ outputs = inputs:
 # hosts/nixos-desktop.x86_64-linux/meta.nix
 {
   roles = [ "desktop" "development" ];
-  homeManager.useGlobalPkgs = false;
+  home.useGlobalPkgs = false;
 }
 ```
 
@@ -300,13 +314,18 @@ outputs = inputs:
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  extraNixosModules = [ ./overrides/nixos.nix ];
-  extraHomeModules = [ ./overrides/home.nix ];
-  extraModules = [ ./overrides/shared.nix ];
+  nixos.modules = [
+    ./overrides/shared.nix
+    ./overrides/nixos.nix
+  ];
+  home.modules = [
+    ./overrides/shared.nix
+    ./overrides/home.nix
+  ];
 }
 ```
 
-`extraHomeModules` 会同时进入独立 home-manager 与嵌入式 home-manager，不需要重复配置。
+`home.modules` 会同时进入独立与嵌入式 Home Manager。需要两侧共享的模块应显式加入两个列表，使注入边界保持清晰。
 
 ### 模块输出
 
@@ -319,24 +338,26 @@ inputs.cloud.lib.mkFlake {
 
 ### 统一 nixpkgs 包集合
 
-自动发现的 `overlays/<name>/default.nix`、`extraOverlays` 与 `nixpkgsConfig` 会统一应用到：
+自动发现的 `overlays/<name>/default.nix`、`nixpkgs.overlays` 与 `nixpkgs.config` 会统一应用到：
 
 - NixOS 的 `pkgs`；
 - 独立与嵌入式 home-manager 的 `pkgs`；
 - `packages`、`devShells`、`checks`、`apps` 与 `formatter`。
 
-嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。对于 Stylix 等会在 HM 侧设置 overlay 的模块，可按主机关闭 `homeManagerUseGlobalPkgs`；框架会把基础 nixpkgs 配置与 overlays 注入 HM 自己的 nixpkgs。
+嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。对于 Stylix 等会在 HM 侧设置 overlay 的模块，可按主机设置 `home.useGlobalPkgs = false`；框架会把基础 nixpkgs 配置与 overlays 注入 HM 自己的 nixpkgs。
 
 因此自定义包可以直接依赖 overlay 新增的属性，无需再从 `nixpkgs.legacyPackages` 手动构造另一套包集合：
 
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  nixpkgsConfig = {
-    allowUnfree = true;
-    permittedInsecurePackages = [ "example-1.0" ];
+  nixpkgs = {
+    config = {
+      allowUnfree = true;
+      permittedInsecurePackages = [ "example-1.0" ];
+    };
+    overlays = [ (final: prev: { /* ... */ }) ];
   };
-  extraOverlays = [ (final: prev: { /* ... */ }) ];
 }
 ```
 
@@ -348,9 +369,9 @@ inputs.cloud.lib.mkFlake {
 - `formatter/default.nix` → `formatter.<system>`，文件应返回 formatter derivation。
 - `deploy/default.nix` → 顶层 `deploy`，可用于 deploy-rs 等部署工具的配置。
 
-`apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`cloud`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`cloud`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `extraOutputs` 补充。
+`apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`cloud`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`cloud`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `outputs.extra` 补充。
 
-自动发现条目可通过 `disabledOutputs` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀继续兼容。
+自动发现条目可通过 `outputs.disabled` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀继续兼容。
 
 ### 开发体验
 
@@ -408,20 +429,20 @@ inputs.cloud.lib.mkFlake {
 # hosts/yc-hk-1.x86_64-linux/meta.nix
 {
   roles = [ "server" ];
-  homeManager.embed = false;
+  home.embed = false;
 }
 ```
 
 也可从 flake 统一定义策略：
 
 ```nix
-embedHomeManager = {
+home.embed = {
   default = true;
   hosts.yc-hk-1 = false;
 };
 ```
 
-`homeManagerUseGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`cloud.users` 由框架写入推导结果，模块可读取但不应手动赋值。
+`home.useGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`cloud.users` 由框架写入推导结果，模块可读取但不应手动赋值。
 
 ## Overlays 与打补丁
 

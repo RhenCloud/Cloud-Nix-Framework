@@ -40,16 +40,41 @@
       exampleFlake = cloud.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
-        extraSpecialArgs.cloudTestArg = "injected";
-        nixpkgsConfig.allowUnfree = true;
-        extraOverlays = [
+        nixos.specialArgs = {
+          cloudTestArg = "injected";
+          cloudNixosOnly = "nixos-only";
+        };
+        home.specialArgs = {
+          cloudTestArg = "injected";
+          cloudHomeOnly = "home-only";
+        };
+        nixpkgs.config.allowUnfree = true;
+        nixpkgs.overlays = [
           (final: _: {
             cloud-extra-marker = final.writeText "cloud-extra-marker" "ok";
           })
         ];
-        extraHomeModules = [
+        nixos.modules = [
           (
+            args@{
+              cloudNixosOnly,
+              ...
+            }:
             {
+              assertions = [
+                {
+                  assertion = !(args ? cloudHomeOnly);
+                  message = "home.specialArgs 泄漏到了 NixOS module";
+                }
+              ];
+              environment.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG = cloudNixosOnly;
+            }
+          )
+        ];
+        home.modules = [
+          (
+            args@{
+              cloudHomeOnly,
               cloudTestArg,
               pkgs,
               ...
@@ -57,6 +82,8 @@
             {
               home.sessionVariables = {
                 CLOUD_SPECIAL_ARG = cloudTestArg;
+                CLOUD_HOME_SPECIAL_ARG = cloudHomeOnly;
+                CLOUD_NIXOS_SPECIAL_ARG_LEAK = if args ? cloudNixosOnly then "yes" else "no";
                 CLOUD_DISCOVERED_OVERLAY = if pkgs ? cloud-example then "yes" else "no";
                 CLOUD_EXTRA_OVERLAY = if pkgs ? cloud-extra-marker then "yes" else "no";
                 CLOUD_ALLOW_UNFREE = if pkgs.config.allowUnfree then "yes" else "no";
@@ -65,6 +92,7 @@
           )
         ];
       };
+      # 故意保留扁平参数，验证弃用兼容路径仍然可用
       exampleFlakeNoEmbed = cloud.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
@@ -74,7 +102,7 @@
       exampleFlakeHostPolicy = cloud.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
-        embedHomeManager = {
+        home.embed = {
           default = true;
           hosts.nixos-desktop = false;
         };
@@ -82,7 +110,7 @@
       exampleFlakeDisabled = cloud.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
-        disabledOutputs = [
+        outputs.disabled = [
           "apps.hello"
           "checks.example"
           "deploy"
@@ -159,6 +187,7 @@
             printf '%s\n' "${builtins.concatStringsSep " " (builtins.attrNames cloud)}" > "$out"
           '';
           host = pkgs.runCommand "cloud-host" { } ''
+            test "${exampleHost.config.environment.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG}" = "nixos-only"
             printf '%s\n' "${toString exampleHost.config.cloud.users}" > "$out"
           '';
           home = pkgs.runCommand "cloud-home" { } ''
@@ -170,11 +199,15 @@
           homeEmbedded = pkgs.runCommand "cloud-home-embedded" { } ''
             test "${exampleEmbeddedHome.home.username}" = "rhencloud"
             test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_SPECIAL_ARG}" = "injected"
+            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_HOME_SPECIAL_ARG}" = "home-only"
+            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG_LEAK}" = "no"
             test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
             test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
             printf '%s\n' "${exampleEmbeddedHome.home.username}" > "$out"
           '';
           homeStandalonePkgs = pkgs.runCommand "cloud-home-standalone-pkgs" { } ''
+            test "${exampleHome.config.home.sessionVariables.CLOUD_HOME_SPECIAL_ARG}" = "home-only"
+            test "${exampleHome.config.home.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG_LEAK}" = "no"
             test "${exampleHome.config.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
             test "${exampleHome.config.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
             test "${exampleHome.config.home.sessionVariables.CLOUD_ALLOW_UNFREE}" = "yes"
@@ -200,7 +233,7 @@
             if [ "${
               if builtins.hasAttr "home-manager" examplePolicyHost.options then "yes" else "no"
             }" = "yes" ]; then
-              echo "per-host embedHomeManager 策略未生效" >&2
+              echo "per-host home.embed 策略未生效" >&2
               exit 1
             fi
             test "${exampleStandaloneHome.config.home.sessionVariables.CLOUD_STANDALONE}" = "1"
@@ -245,13 +278,13 @@
             if [ "${
               if builtins.hasAttr "overlay-consumer" exampleFlakeDisabled.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "disabledOutputs 未禁用 package" >&2
+              echo "outputs.disabled 未禁用 package" >&2
               exit 1
             fi
             if [ "${
               if builtins.hasAttr "example" exampleFlakeDisabled.checks.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "disabledOutputs 未禁用 check" >&2
+              echo "outputs.disabled 未禁用 check" >&2
               exit 1
             fi
             if [ "${
@@ -263,15 +296,15 @@
               else
                 "no"
             }" = "yes" ]; then
-              echo "disabledOutputs 未禁用 app" >&2
+              echo "outputs.disabled 未禁用 app" >&2
               exit 1
             fi
             if [ "${if builtins.hasAttr "formatter" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
-              echo "disabledOutputs 未禁用 formatter" >&2
+              echo "outputs.disabled 未禁用 formatter" >&2
               exit 1
             fi
             if [ "${if builtins.hasAttr "deploy" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
-              echo "disabledOutputs 未禁用 deploy" >&2
+              echo "outputs.disabled 未禁用 deploy" >&2
               exit 1
             fi
             printf '%s\n' "${exampleDottedPkg.name}" > "$out"

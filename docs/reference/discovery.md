@@ -32,7 +32,7 @@
 两种禁用机制独立生效，任一满足即禁用：
 
 1. **`meta.nix { enable = false; }`**：在发现阶段之后、output 构造之前过滤。
-2. **`mkFlake` 的 `disabledOutputs`**：在 output 构造阶段按名称过滤。
+2. **`mkFlake` 的 `outputs.disabled`**：在 output 构造阶段按名称过滤。
 
 命名冲突（同一 output key 由多条规则产生）：发现阶段提前 `throw`，不进入 output 构造。
 
@@ -96,8 +96,8 @@ hosts/<name>.<system>/meta.nix      →  （仅元数据，不直接生成 outpu
 5. 自动发现的 modules/（按角色过滤，字典序）
 6. moduleRegistries 中的外部模块
 7. 主机自身的 default.nix（去除框架元数据字段）
-8. mkFlake/mkSystem 传入的 extraModules
-9. mkFlake/mkSystem 传入的 extraNixosModules
+8. mkFlake 的 nixos.modules / mkSystem 的 extraModules
+9. mkSystem 的 extraNixosModules
 ```
 
 ---
@@ -147,8 +147,8 @@ homes/<user>/
 2. 自动发现的 modules/（home 侧，按角色过滤，字典序）
 3. homes/<user>/default.nix（若存在）
 4. homes/<user>/<host>.nix（若存在且当前构造的是 per-host home）
-5. mkFlake/mkHome 传入的 extraModules
-6. mkFlake/mkHome 传入的 extraHomeModules
+5. mkFlake 的 home.modules / mkHome 的 extraModules
+6. mkHome 的 extraHomeModules
 ```
 
 ### meta.nix 字段（homes）
@@ -376,7 +376,7 @@ mkFlake 调用
 │
 ├─ [7] 生成框架保留 checks.*.cloud-discovery（纯 JSON 报告，不构建主机）
 │
-└─ [8] lib.recursiveUpdate generated extraOutputs
+└─ [8] lib.recursiveUpdate generated outputs.extra
 ```
 
 **关键保证**：步骤 [1] 是纯文件系统扫描，不求值任何 Nix 配置。步骤 [3]–[7] 均为惰性属性集，`nix flake show` 或查询单个 output 不会触发其他 output 的求值。

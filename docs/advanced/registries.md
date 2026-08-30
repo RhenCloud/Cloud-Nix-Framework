@@ -22,9 +22,9 @@ outputs = inputs:
   };
 ```
 
-## 与 extraNixosModules 的区别
+## 与 nixos.modules 的区别
 
-| | `moduleRegistries` | `extraNixosModules` |
+| | `moduleRegistries` | `nixos.modules` |
 | ---- | ---- | ---- |
 | 角色过滤 | 支持 | 不支持（始终注入） |
 | 注入时机 | 与 modules/ 同序 | 最后注入 |

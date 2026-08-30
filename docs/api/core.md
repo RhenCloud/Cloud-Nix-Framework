@@ -6,73 +6,102 @@
 
 顶层 outputs 构造器，自动扫描目录并拼接全部 outputs：
 
+**推荐写法（嵌套命名空间，0.3.0+）**：
+
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  root = ./.; # 可选；通常自动推导
+
+  # 可选；通常自动推导
+  root = ./.;
   systems = [ "x86_64-linux" "aarch64-linux" ];
-  extraOutputs = { };
-  extraSpecialArgs = { };
-  extraModules = [ ];
-  extraNixosModules = [ ];
-  extraHomeModules = [ ];
-  nixpkgsConfig = { allowUnfree = true; };
-  extraOverlays = [ ];
-  embedHomeManager = true;
-  homeManagerUseGlobalPkgs = true;
-  disabledOutputs = [ ];
+
+  nixpkgs = {
+    config = { allowUnfree = true; };
+    overlays = [ ];
+  };
+
+  nixos = {
+    modules = [ ];       # 仅 NixOS
+    specialArgs = { };
+  };
+
+  home = {
+    modules = [ ];       # 仅 HM
+    embed = true;        # 是否嵌入 NixOS，支持全局值、函数、per-host 属性集
+    useGlobalPkgs = true;
+  };
+
+  outputs = {
+    extra = { };         # 附加 outputs
+    disabled = [ ];      # 禁用指定 output
+    expected = { };      # 期望发现的 output（校验用）
+  };
+
   moduleRegistries = [ ];
 }
 ```
 
-| 参数 | 默认值 | 说明 |
-| ---- | ------ | ---- |
-| `inputs` | 必填 | 当前用户 flake 的全部 inputs |
-| `root` | 自动推导 | 配置仓库根目录；自定义 helper 封装调用时可显式传入 `./.` |
-| `systems` | `x86_64-linux`、`aarch64-linux` | per-system outputs 的目标架构 |
-| `extraOutputs` | `{ }` | 与自动生成 outputs 深度合并 |
-| `extraSpecialArgs` | `{ }` | 注入 NixOS、独立 HM 与嵌入式 HM |
-| `extraModules` | `[ ]` | 同时追加到 NixOS 与 HM |
-| `extraNixosModules` | `[ ]` | 仅追加到 NixOS |
-| `extraHomeModules` | `[ ]` | 追加到独立与嵌入式 HM |
-| `nixpkgsConfig` | `{ }` | 统一的 nixpkgs 配置，如 `allowUnfree` |
-| `extraOverlays` | `[ ]` | 在自动发现 overlays 之后追加 |
-| `embedHomeManager` | `true` | 是否把关联 home 嵌入 NixOS；支持全局值、函数和 per-host 属性集 |
-| `homeManagerUseGlobalPkgs` | `true` | 嵌入式 HM 是否复用 NixOS `pkgs`；支持按主机配置 |
-| `disabledOutputs` | `[ ]` | 在求值文件前禁用自动发现的 output |
-| `moduleRegistries` | `[ ]` | 按需并入外部模块注册表 |
+| 参数 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `inputs` | attrset | 必填 | 当前用户 flake 的全部 inputs |
+| `root` | path | 自动推导 | 配置仓库根目录 |
+| `systems` | `[string]` | `["x86_64-linux","aarch64-linux"]` | per-system outputs 的目标架构 |
+| `nixpkgs.config` | attrset | `{}` | 统一 nixpkgs 配置，如 `allowUnfree` |
+| `nixpkgs.overlays` | `[overlay]` | `[]` | 在自动发现 overlays 之后追加 |
+| `nixos.modules` | `[module]` | `[]` | 仅追加到 NixOS |
+| `nixos.specialArgs` | attrset | `{}` | 注入 NixOS specialArgs |
+| `home.modules` | `[module]` | `[]` | 追加到独立与嵌入式 HM |
+| `home.specialArgs` | attrset | `{}` | 注入 HM specialArgs |
+| `home.embed` | bool/fn/attrset | `true` | 是否将关联 home 嵌入 NixOS |
+| `home.useGlobalPkgs` | bool/fn/attrset | `true` | 嵌入式 HM 是否复用 NixOS pkgs |
+| `outputs.extra` | attrset | `{}` | 与自动生成 outputs 深度合并 |
+| `outputs.disabled` | `[string]` | `[]` | 禁用自动发现的 output |
+| `outputs.expected` | attrset | `{}` | 期望发现的 hosts/homes/packages/apps 列表 |
+| `moduleRegistries` | `[registry]` | `[]` | 按需并入外部模块注册表 |
 
-`embedHomeManager` 与 `homeManagerUseGlobalPkgs` 都支持三种形式：
+::: details 旧写法（已弃用，仍兼容）
+
+使用旧扁平参数时会输出 `builtins.trace` 警告，但不会报错。建议迁移到嵌套命名空间。
+
+```nix
+inputs.cloud.lib.mkFlake {
+  inherit inputs;
+  nixpkgsConfig = { allowUnfree = true; };  # → nixpkgs.config
+  extraOverlays = [ ];                       # → nixpkgs.overlays
+  extraModules = [ ];                        # → 同时加入 nixos.modules 与 home.modules
+  extraNixosModules = [ ];                   # → nixos.modules
+  extraHomeModules = [ ];                    # → home.modules
+  extraSpecialArgs = { };                    # → nixos.specialArgs / home.specialArgs
+  embedHomeManager = true;                   # → home.embed
+  homeManagerUseGlobalPkgs = true;           # → home.useGlobalPkgs
+  extraOutputs = { };                        # → outputs.extra
+  disabledOutputs = [ ];                     # → outputs.disabled
+  expectedOutputs = { };                     # → outputs.expected
+}
+```
+
+:::
+
+`home.embed` 与 `home.useGlobalPkgs` 都支持三种形式。以 `home.embed` 为例：
 
 ```nix
 # 全局值
-embedHomeManager = false;
+home.embed = false;
 
 # 函数
-embedHomeManager = host: host != "yc-hk-1";
+home.embed = host: host != "yc-hk-1";
 
 # 带默认值的 per-host 策略
-embedHomeManager = {
+home.embed = {
   default = true;
   hosts.yc-hk-1 = false;
 };
 ```
 
-主机的 `meta.nix` 可以覆盖全局策略：
+`home.useGlobalPkgs` 同理。
 
-```nix
-# hosts/yc-hk-1.x86_64-linux/meta.nix
-{
-  roles = [ "server" ];
-
-  homeManager = {
-    embed = false;
-    useGlobalPkgs = false;
-  };
-}
-```
-
-主机 `meta.nix` 请使用规范字段（`embedHomeManager`/`homeManagerUseGlobalPkgs` 为 mkFlake 全局参数，在 meta.nix 中已弃用）：
+主机 `meta.nix` 可以覆盖全局策略（meta.nix 中请使用 `home.embed`/`home.useGlobalPkgs`）：
 
 ```nix
 # hosts/yc-hk-1.x86_64-linux/meta.nix
@@ -83,12 +112,12 @@ embedHomeManager = {
 }
 ```
 
-主机元数据优先于全局策略。关闭 `useGlobalPkgs` 时，框架会把自动发现的 overlays、`extraOverlays` 与 `nixpkgsConfig` 注入该主机的 HM nixpkgs，使 HM 模块仍可追加自己的 overlays。这适合 Stylix 等需要在 HM 侧设置 overlay 的模块。
+主机元数据优先于全局策略。关闭 `home.useGlobalPkgs` 时，框架会把自动发现的 overlays、`nixpkgs.overlays` 与 `nixpkgs.config` 注入该主机的 HM nixpkgs，使 HM 模块仍可追加自己的 overlays。这适合 Stylix 等需要在 HM 侧设置 overlay 的模块。
 
-`disabledOutputs` 推荐使用完整 output 标识：
+`outputs.disabled` 推荐使用完整 output 标识：
 
 ```nix
-disabledOutputs = [
+outputs.disabled = [
   "checks.expensive"
   "checks.aarch64-linux.broken-on-aarch64"
   "packages.some-package"
@@ -101,7 +130,7 @@ disabledOutputs = [
 也可写成分类属性集：
 
 ```nix
-disabledOutputs = {
+outputs.disabled = {
   checks = [ "expensive" ];
   packages = [ "some-package" ];
 };
@@ -121,10 +150,10 @@ outputs = inputs:
       host = "nixos-desktop";
       system = "x86_64-linux";
       modules = [ ];
-      extraModules = [ ];
       extraNixosModules = [ ];
       extraHomeModules = [ ];
-      extraSpecialArgs = { };
+      extraSpecialArgs = { };      # NixOS specialArgs
+      extraHomeSpecialArgs = { };  # 嵌入式 HM extraSpecialArgs
       nixpkgsConfig = { };
       extraOverlays = [ ];
       embedHomeManager = true;
@@ -133,7 +162,7 @@ outputs = inputs:
   };
 ```
 
-`extraHomeModules` 仅在嵌入关联 home 时使用。关闭嵌入不影响独立 `homeConfigurations` 的生成。
+`extraHomeModules` 与 `extraHomeSpecialArgs` 仅在嵌入关联 home 时使用。关闭嵌入不影响独立 `homeConfigurations` 的生成。`mkSystem` / `mkHome` 保留直接构造 API 的扁平参数；嵌套命名空间目前仅属于 `mkFlake`。
 
 ## `mkHome`
 
@@ -150,7 +179,6 @@ outputs = inputs:
       host = "nixos-desktop";
       system = "x86_64-linux"; # 仅全局 home 使用
       modules = [ ];
-      extraModules = [ ];
       extraHomeModules = [ ];
       extraSpecialArgs = { };
       nixpkgsConfig = { };
@@ -168,6 +196,15 @@ inputs.cloud.lib.mkLib { inherit inputs; }
 ```
 
 返回已绑定当前 flake 的 `cloud` 命名空间。
+
+## `version`
+
+```nix
+inputs.cloud.lib.version
+# → { major = 0; minor = 3; patch = 0; pre = "dev"; string = "0.3.0-dev"; }
+```
+
+版本号也可从模块内的 `cloud` 参数读取（`cloud.version`）。适合在用户模块中做 feature detection 或记录依赖版本。详见[版本策略](/reference/versioning)。
 
 ## 自动发现函数
 

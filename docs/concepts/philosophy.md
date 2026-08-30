@@ -22,7 +22,7 @@
 | 类型 | 接触的概念 |
 | ---- | ---------- |
 | 普通用户 | 目录约定、`meta.nix`、角色、模块魔法文件 |
-| 高级用户 | `mkFlake` 参数、`mkSystem`/`mkHome` 逃生舱、`extraOutputs` |
+| 高级用户 | `mkFlake` 分组参数、`mkSystem`/`mkHome` 逃生舱、`outputs.extra` |
 
 绝大多数场景不需要碰 `mkSystem`。
 
@@ -49,4 +49,4 @@
 
 CNF 的核心是发现引擎（`lib/discover.nix`）。周边的 patches helper、sops helper 是**可选扩展**，不是核心承诺。随着生态演进，这些扩展可能独立化或移到用户仓库。
 
-框架不内置部署工具、镜像构建逻辑或 CI 流水线——这些通过约定目录（`deploy/`、`images/`）和 `extraOutputs` 交给用户工具链处理。
+框架不内置部署工具、镜像构建逻辑或 CI 流水线——这些通过约定目录（`deploy/`、`images/`）和 `outputs.extra` 交给用户工具链处理。

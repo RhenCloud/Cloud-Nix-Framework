@@ -25,7 +25,7 @@ cat result | python3 -m json.tool
 
 1. 目录后缀不合法（不在 `lib.systems.flakeExposed` 中）
 2. 缺少 `default.nix`
-3. 在 `disabledOutputs` 中
+3. 在 `outputs.disabled` 中
 4. `meta.nix` 的 `enable = false`
 
 检查：

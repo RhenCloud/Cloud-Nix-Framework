@@ -13,7 +13,7 @@ mkFlake 调用
 │       ├── packages/    → [ { name, path, meta, system? } ]
 │       ├── overlays/    → [ { name, path } ]
 │       ├── apps/shells/checks/formatter/deploy/lib/
-│       └── 禁用过滤（disabledOutputs、meta.enable = false）
+│       └── 禁用过滤（outputs.disabled、meta.enable = false）
 │
 ├─ [2] 构造 overlays / pkgsFor
 │       不求值任何主机 config
@@ -32,7 +32,7 @@ mkFlake 调用
 ├─ [7] 生成 checks.*.cloud-discovery
 │       纯 JSON 报告，不构建主机
 │
-└─ [8] lib.recursiveUpdate generated extraOutputs
+└─ [8] lib.recursiveUpdate generated outputs.extra
 ```
 
 **关键保证**：步骤 [1] 是纯文件系统扫描。步骤 [3]–[7] 均为惰性属性集，`nix flake show` 或查询单个 output 不会触发其他 output 的求值。
@@ -61,13 +61,13 @@ lib/
 5. 自动发现的 modules/（按角色过滤，字典序）
 6. moduleRegistries 中的外部模块
 7. 主机自身的 default.nix
-8. mkFlake/mkSystem 传入的 extraModules
-9. mkFlake/mkSystem 传入的 extraNixosModules
+8. mkFlake 的 nixos.modules / mkSystem 的 extraModules
+9. mkSystem 的 extraNixosModules
 ```
 
 ## specialArgs 注入路径
 
-所有 NixOS 模块均收到：`inputs`、`self`、`cloud`（含 `patches`、`sops`）以及 `extraSpecialArgs`。
+所有 NixOS 模块均收到：`inputs`、`self`、`cloud`（含 `patches`、`sops`）以及 `nixos.specialArgs`。
 
 嵌入式 home-manager 的 specialArgs 写入 `home-manager.extraSpecialArgs`，与独立 HM 行为一致。
 

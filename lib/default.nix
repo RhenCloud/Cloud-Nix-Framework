@@ -11,6 +11,14 @@ let
 
   forAllSystems = systems: f: lib.genAttrs systems f;
 
+  version = {
+    major = 0;
+    minor = 3;
+    patch = 0;
+    pre = "dev";
+    string = "0.3.0-dev";
+  };
+
   renderOptions =
     opts:
     let
@@ -108,7 +116,7 @@ let
 
       sops' = import ./sops.nix { inherit projectRoot; };
       cloudInject = {
-        inherit patches;
+        inherit patches version;
         sops = sops';
       };
       cloud = cloudInject;
@@ -228,6 +236,7 @@ let
           extraNixosModules ? [ ],
           extraHomeModules ? [ ],
           extraSpecialArgs ? { },
+          extraHomeSpecialArgs ? extraSpecialArgs,
           nixpkgsConfig ? { },
           extraOverlays ? [ ],
           embedHomeManager ? true,
@@ -242,6 +251,7 @@ let
           };
           hostModule = hostRecord.path;
           specialArgs = specialArgsFor extraSpecialArgs;
+          homeSpecialArgs = specialArgsFor extraHomeSpecialArgs;
           users = usersForHost host;
 
           metadata = hostMeta.hostMetadataFor { inherit host pkgs; };
@@ -290,7 +300,7 @@ let
               home-manager = {
                 inherit useGlobalPkgs;
                 useUserPackages = true;
-                extraSpecialArgs = specialArgs;
+                extraSpecialArgs = homeSpecialArgs;
                 users = lib.genAttrs users (
                   u:
                   {
@@ -373,8 +383,9 @@ let
         };
 
       mkFlake =
-        {
+        args_raw@{
           systems ? defaultSystems,
+          # --- 扁平参数（向后兼容，已弃用；请使用嵌套命名空间） ---
           extraOutputs ? { },
           extraSpecialArgs ? { },
           extraModules ? [ ],
@@ -386,9 +397,56 @@ let
           homeManagerUseGlobalPkgs ? true,
           disabledOutputs ? [ ],
           expectedOutputs ? { },
+          # --- 嵌套命名空间（推荐） ---
+          # nixpkgs = { config?; overlays?; }
+          nixpkgs ? { },
+          # nixos = { modules?; specialArgs?; }
+          nixos ? { },
+          # home = { modules?; specialArgs?; embed?; useGlobalPkgs?; }
+          home ? { },
+          # outputs = { extra?; disabled?; expected?; }
+          outputs ? { },
           ...
         }:
         let
+          # 解析嵌套命名空间，与扁平参数合并（嵌套命名空间优先）。
+          # 扁平参数通过 args_raw 读取，避免 let 递归绑定遮蔽同名参数。
+          flatOr =
+            name: default:
+            if builtins.hasAttr name args_raw then
+              builtins.trace "[CNF] mkFlake 参数 '${name}' 已弃用，请使用嵌套命名空间（见文档）" args_raw.${name}
+            else
+              default;
+
+          nixpkgsConfig =
+            if builtins.hasAttr "config" nixpkgs then nixpkgs.config else flatOr "nixpkgsConfig" { };
+          extraOverlays =
+            if builtins.hasAttr "overlays" nixpkgs then nixpkgs.overlays else flatOr "extraOverlays" [ ];
+          legacySpecialArgs = flatOr "extraSpecialArgs" { };
+          extraSpecialArgs =
+            if builtins.hasAttr "specialArgs" nixos then nixos.specialArgs else legacySpecialArgs;
+          extraHomeSpecialArgs =
+            if builtins.hasAttr "specialArgs" home then home.specialArgs else legacySpecialArgs;
+          # extraModules 同时注入 NixOS 与 HM 两侧；分组参数按侧注入。
+          extraModules = flatOr "extraModules" [ ];
+          extraNixosModules =
+            if builtins.hasAttr "modules" nixos then nixos.modules else flatOr "extraNixosModules" [ ];
+          extraHomeModules =
+            if builtins.hasAttr "modules" home then home.modules else flatOr "extraHomeModules" [ ];
+          embedHomeManager =
+            if builtins.hasAttr "embed" home then home.embed else flatOr "embedHomeManager" true;
+          homeManagerUseGlobalPkgs =
+            if builtins.hasAttr "useGlobalPkgs" home then
+              home.useGlobalPkgs
+            else
+              flatOr "homeManagerUseGlobalPkgs" true;
+          extraOutputs =
+            if builtins.hasAttr "extra" outputs then outputs.extra else flatOr "extraOutputs" { };
+          disabledOutputs =
+            if builtins.hasAttr "disabled" outputs then outputs.disabled else flatOr "disabledOutputs" [ ];
+          expectedOutputs =
+            if builtins.hasAttr "expected" outputs then outputs.expected else flatOr "expectedOutputs" { };
+
           nixosConfigurations = lib.listToAttrs (
             map (
               h:
@@ -397,6 +455,7 @@ let
                 inherit (h) system;
                 inherit
                   extraSpecialArgs
+                  extraHomeSpecialArgs
                   extraModules
                   extraNixosModules
                   extraHomeModules
@@ -590,8 +649,8 @@ let
                     lib.nameValuePair h.user (mkHome {
                       inherit (h) user;
                       system = lib.head systems;
+                      extraSpecialArgs = extraHomeSpecialArgs;
                       inherit
-                        extraSpecialArgs
                         extraModules
                         extraHomeModules
                         nixpkgsConfig
@@ -613,9 +672,9 @@ let
                       host:
                       lib.nameValuePair "${h.user}@${host}" (mkHome {
                         inherit (h) user;
+                        extraSpecialArgs = extraHomeSpecialArgs;
                         inherit
                           host
-                          extraSpecialArgs
                           extraModules
                           extraHomeModules
                           nixpkgsConfig
@@ -743,6 +802,7 @@ let
         mkSystem
         mkHome
         forAllSystems
+        version
         ;
       inherit (fs) importModules flattenTree groupModules;
       inherit patches;
@@ -777,6 +837,7 @@ in
     mkFlake
     forAllSystems
     renderOptions
+    version
     ;
   inherit (fs) importModules flattenTree groupModules;
   inherit patches;

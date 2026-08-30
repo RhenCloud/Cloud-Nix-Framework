@@ -110,7 +110,7 @@ outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
 
-    embedHomeManager = {
+    home.embed = {
       default = true;
       hosts.yc-hk-1 = false;
     };

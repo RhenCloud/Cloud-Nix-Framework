@@ -33,18 +33,18 @@ stdenv.mkDerivation {
 }
 ```
 
-## nixpkgsConfig 统一配置
+## 统一 nixpkgs 配置
 
-自动发现的包使用与 NixOS/HM 相同的 `nixpkgs` 实例（含 `nixpkgsConfig` 与 overlays），不再使用未经配置的 `legacyPackages`：
+自动发现的包使用与 NixOS/HM 相同的 `nixpkgs` 实例（含 `nixpkgs.config` 与 overlays），不再使用未经配置的 `legacyPackages`：
 
 ```nix
 outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
-    nixpkgsConfig = {
-      allowUnfree = true;
+    nixpkgs = {
+      config.allowUnfree = true;
+      overlays = [ (final: prev: { myPkg = ...; }) ];
     };
-    extraOverlays = [ (final: prev: { myPkg = ...; }) ];
   };
 ```
 
@@ -82,7 +82,7 @@ nix fmt
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  disabledOutputs = [
+  outputs.disabled = [
     "packages.some-broken-package"
     "checks.x86_64-linux.expensive"
     "apps.debug"

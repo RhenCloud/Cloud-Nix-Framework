@@ -25,7 +25,7 @@ features:
     details: 通过 roles 声明，自动决定哪些模块注入哪台主机，desktop/server/development 按需组合
   - title: 零运行时依赖
     details: 纯 nixpkgs.lib 实现，无 flake-utils / flake.parts 依赖
-  - title: 统一 nixpkgsConfig
+  - title: 统一 nixpkgs 配置
     details: allowUnfree、overlay 统一作用于 NixOS、HM 与所有 per-system outputs
   - title: 惰性求值
     details: 发现阶段纯文件扫描，nix flake show 不触发主机 config 求值

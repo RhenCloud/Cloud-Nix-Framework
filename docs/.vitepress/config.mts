@@ -56,6 +56,7 @@ export default defineConfig({
           text: '参考',
           items: [
             { text: 'Discovery 规范', link: '/reference/discovery' },
+            { text: '版本策略', link: '/reference/versioning' },
             { text: '核心 API', link: '/api/core' },
           ],
         },
@@ -66,6 +67,7 @@ export default defineConfig({
           items: [
             { text: '核心 API', link: '/api/core' },
             { text: 'Discovery 规范', link: '/reference/discovery' },
+            { text: '版本策略', link: '/reference/versioning' },
           ],
         },
       ],

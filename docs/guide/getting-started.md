@@ -42,31 +42,34 @@ outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
 
-    nixpkgsConfig = {
-      allowUnfree = true;
-      permittedInsecurePackages = [ ];
+    nixpkgs = {
+      config = {
+        allowUnfree = true;
+        permittedInsecurePackages = [ ];
+      };
+      overlays = [ ];
     };
 
-    extraOverlays = [ ];
-    extraSpecialArgs = { };
+    nixos.specialArgs = { };
+    home.specialArgs = { };
 
     # 默认嵌入，仅为指定主机关闭。
-    embedHomeManager = {
+    home.embed = {
       default = true;
       hosts.yc-hk-1 = false;
     };
 
     # 可按主机关闭 useGlobalPkgs，兼容需要自行添加 HM overlay 的模块。
-    homeManagerUseGlobalPkgs = {
+    home.useGlobalPkgs = {
       default = true;
       hosts.nixos-desktop = false;
     };
 
-    disabledOutputs = [ "checks.expensive" ];
+    outputs.disabled = [ "checks.expensive" ];
   };
 ```
 
-自动发现的 overlays、`extraOverlays` 与 `nixpkgsConfig` 会统一作用于 NixOS、独立/嵌入式 home-manager 以及所有 per-system outputs。关闭 `homeManagerUseGlobalPkgs` 时，这些配置会注入 HM 自己的 nixpkgs，同时允许 HM 模块追加 overlay。
+自动发现的 overlays、`nixpkgs.overlays` 与 `nixpkgs.config` 会统一作用于 NixOS、独立/嵌入式 home-manager 以及所有 per-system outputs。关闭 `home.useGlobalPkgs` 时，这些配置会注入 HM 自己的 nixpkgs，同时允许 HM 模块追加 overlay。
 
 推荐在每台主机的 `meta.nix` 声明角色和主机级策略：
 
