@@ -4,10 +4,6 @@
   ...
 }:
 {
-  roles = [
-    "desktop"
-    "development"
-  ];
   config = {
     boot.isContainer = true;
 

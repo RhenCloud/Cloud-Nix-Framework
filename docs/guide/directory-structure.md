@@ -2,32 +2,30 @@
 
 一个标准的用户配置仓库长这样：
 
-```
+```text
 .
-├── flake.nix                             # 唯一入口
-├── hosts/                                # NixOS 主机
+├── flake.nix
+├── hosts/
 │   └── nixos-desktop.x86_64-linux/
-│       └── default.nix                   #   -> nixosConfigurations.nixos-desktop
-├── homes/                                # home-manager 用户
+│       ├── meta.nix                      # 角色与框架元数据
+│       └── default.nix                   # nixosConfigurations.nixos-desktop
+├── homes/
 │   └── rhencloud/
-│       ├── default.nix                   #   -> homeConfigurations.rhencloud
-│       └── nixos-desktop.nix             #   -> homeConfigurations."rhencloud@nixos-desktop"
-├── modules/                              # 可复用模块（单树，自动分拣）
-│   ├── desktop/hyprland/
-│   │   ├── default.nix                   #   中性模块：共享 option
-│   │   ├── nixos.nix                     #   注入 NixOS
-│   │   └── home.nix                      #   注入 home-manager
-│   └── _common/networking/
-│       └── nixos.nix                     #   所有角色共享的 NixOS 模块
-├── packages/<name>/default.nix           # packages.<system>.<name>
-├── overlays/<name>/default.nix           # overlays.<name> + 自动应用
-├── apps/<name>/default.nix               # apps.<system>.<name>
-├── formatter/default.nix                 # formatter.<system>
-├── deploy/default.nix                    # deploy
-├── lib/*.nix                             # lib.<name>
-├── shells/<name>/default.nix             # devShells.<system>.<name>
-├── checks/<name>/default.nix             # checks.<system>.<name>
-└── secrets/                              # sops helper 约定路径
+│       ├── default.nix                   # homeConfigurations.rhencloud
+│       └── nixos-desktop.nix             # homeConfigurations."rhencloud@nixos-desktop"
+├── modules/**/{default,nixos,home}.nix
+├── packages/
+│   ├── <name>/default.nix
+│   ├── <name>/meta.nix                   # 可选：enable / systems
+│   └── <system>/<name>/default.nix       # 明确的单架构约定
+├── overlays/<name>/default.nix
+├── apps/<name>/default.nix
+├── formatter/default.nix
+├── deploy/default.nix
+├── lib/*.nix
+├── shells/<name>/default.nix
+├── checks/<name>/default.nix
+└── secrets/
     ├── common.yaml
     └── hosts/<host>.yaml
 ```
@@ -37,11 +35,13 @@
 | 目录 | 生成的 output |
 | ---- | ------------- |
 | `hosts/<name>.<system>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>.<system>/meta.nix` | 角色与每主机 Home Manager 策略，不直接生成 output |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成目录级 `nixosModules` / `homeModules` |
 | `packages/<name>/default.nix` | `packages.<system>.<name>` |
-| `packages/<name>.<system>/default.nix` | 仅对应架构的 `packages.<system>.<name>` |
+| `packages/<system>/<name>/default.nix` | 仅对应架构的 `packages.<system>.<name>` |
+| `packages/<name>.<system>/default.nix` | 旧式单架构约定，继续兼容 |
 | `overlays/<name>/default.nix` | `overlays.<name>`，并应用到统一包集合 |
 | `apps/<name>/default.nix` | `apps.<system>.<name>` |
 | `formatter/default.nix` | `formatter.<system>` |
@@ -56,22 +56,70 @@
 
 :::
 
-## 主机与 home 自动关联
+## 主机元数据
 
-不需要在 host 中手写 `config.cloud.system` 或 `config.cloud.users`：
+推荐把角色和框架策略放在独立的 `meta.nix`：
+
+```nix
+# hosts/yc-hk-1.x86_64-linux/meta.nix
+{
+  roles = [ "server" ];
+
+  homeManager = {
+    embed = false;
+    useGlobalPkgs = false;
+  };
+}
+```
+
+也可使用等价的顶层字段 `embedHomeManager` 与 `homeManagerUseGlobalPkgs`；角色同时支持单字符串 `role`。主机元数据优先于 `mkFlake` 的全局策略。
+
+`meta.nix` 必须直接返回属性集，不是 NixOS module，也不会收到 `config` 等模块参数。框架读取它以后，`default.nix` 只由 NixOS module system 正式求值，可以在外层安全使用真实 `config`：
+
+```nix
+# hosts/yc-hk-1.x86_64-linux/default.nix
+{ config, ... }:
+{
+  services.openssh.ports = [
+    config.rhencloud.server.ssh.port
+  ];
+}
+```
+
+旧的 `default.nix` 顶层 `role`、`roles`、`embedHomeManager` 和 `homeManagerUseGlobalPkgs` 继续兼容，但需要一次兼容性探测。函数式 host module 若在探测阶段依赖真实 `config`，框架会给出迁移警告、关闭角色过滤，并让主机级 Home Manager 策略回退到全局值；新配置应使用 `meta.nix`。
+
+## 主机与 home 自动关联
 
 - 主机架构来自 `hosts/<name>.<system>/` 的目录后缀。
 - `homes/<user>/<host>.nix` 自动把用户关联到该主机，并生成 `homeConfigurations."<user>@<host>"`。
 - `homes/<user>/default.nix` 是共享 home，并生成 `homeConfigurations.<user>`。
-- 默认关联 home 会嵌入 NixOS；`embedHomeManager = false` 时仅保留独立 home outputs。
+- `homeManager.embed = false` 只关闭该主机的嵌入式 HM，独立 home output 仍然保留。
+
+全局也可使用 per-host 策略：
 
 ```nix
-# flake.nix
 outputs = inputs:
   inputs.cloud.lib.mkFlake {
     inherit inputs;
-    embedHomeManager = false;
+
+    embedHomeManager = {
+      default = true;
+      hosts.yc-hk-1 = false;
+    };
   };
 ```
 
-`cloud.users` 仍由框架根据目录写入，供模块读取，不应手动赋值。
+主机 `meta.nix` 中的设置优先于全局策略。`cloud.users` 仍由框架根据目录写入，供模块读取，不应手动赋值。
+
+## Package 元数据
+
+`packages/<name>/meta.nix` 可显式控制架构并消除点号歧义：
+
+```nix
+{
+  systems = [ "x86_64-linux" ];
+  enable = true;
+}
+```
+
+若包名本身是 `foo.x86_64-linux`，存在 `meta.nix` 且显式声明 `systems` 时，完整目录名会被保留为包名，不再按旧后缀规则拆分。

@@ -45,46 +45,43 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 
 一个标准的用户配置仓库长这样：
 
-```
+```text
 .
-├── flake.nix                             # 唯一入口
-├── hosts/                                # NixOS 主机
+├── flake.nix
+├── hosts/
 │   └── nixos-desktop.x86_64-linux/
-│       └── default.nix                   #   -> nixosConfigurations.nixos-desktop
-├── homes/                                # home-manager 用户
+│       ├── meta.nix                      # 角色与框架元数据
+│       └── default.nix                   # nixosConfigurations.nixos-desktop
+├── homes/
 │   └── rhencloud/
-│       ├── default.nix                   #   -> homeConfigurations.rhencloud
-│       └── nixos-desktop.nix             #   -> homeConfigurations."rhencloud@nixos-desktop"
-├── modules/                              # 可复用模块（单树，自动分拣）
-│   ├── desktop/hyprland/
-│   │   ├── default.nix                   #   中性模块：声明共享 option
-│   │   ├── nixos.nix                     #   注入 NixOS
-│   │   └── home.nix                      #   注入 home-manager
-│   └── shell/fish/
-│       ├── default.nix
-│       └── home.nix                      #   仅 HM 侧，可无 nixos.nix
-├── packages/                             # 自定义包
-│   └── <name>/default.nix
-├── overlays/                             # overlays（含 patch 逻辑）
-│   └── <name>/default.nix
-├── apps/<name>/default.nix               # apps.<system>.<name>
-├── formatter/default.nix                 # formatter.<system>
-├── deploy/default.nix                    # deploy / deploy-rs 配置
-├── lib/                                  # 项目级工具库
-├── shells/<name>/default.nix             # devShells
-├── checks/<name>/default.nix             # flake checks
-└── secrets/                              # sops（common.yaml 或 hosts/<host>.yaml）
+│       ├── default.nix                   # homeConfigurations.rhencloud
+│       └── nixos-desktop.nix             # homeConfigurations."rhencloud@nixos-desktop"
+├── modules/**/{default,nixos,home}.nix
+├── packages/
+│   ├── <name>/default.nix
+│   └── <system>/<name>/default.nix       # 明确的单架构 package
+├── overlays/<name>/default.nix
+├── apps/<name>/default.nix
+├── formatter/default.nix
+├── deploy/default.nix
+├── lib/*.nix
+├── shells/<name>/default.nix
+├── checks/<name>/default.nix
+└── secrets/
+    ├── common.yaml
+    └── hosts/<host>.yaml
 ```
-
-每个目录层级都映射到一个 flake output：
 
 | 目录 | 生成的 output |
 | ---- | ------------- |
 | `hosts/<name>.<system>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>.<system>/meta.nix` | 角色与主机级 Home Manager 策略 |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成 `nixosModules.<目录键>` / `homeModules.<目录键>` |
-| `packages/<name>/default.nix` | `packages.<system>.<name>`（另支持 `packages/<name>.<system>` 单架构） |
+| `packages/<name>/default.nix` | `packages.<system>.<name>` |
+| `packages/<system>/<name>/default.nix` | 单架构 `packages.<system>.<name>` |
+| `packages/<name>.<system>/default.nix` | 旧式单架构约定，继续兼容 |
 | `overlays/<name>/default.nix` | `overlays.<name>`，并自动应用到框架创建的全部包集合 |
 | `apps/<name>/default.nix` | `apps.<system>.<name>` |
 | `formatter/default.nix` | `formatter.<system>` |
@@ -93,7 +90,7 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 | `shells/<name>/default.nix` | `devShells.<system>.<name>` |
 | `checks/<name>/default.nix` | `checks.<system>.<name>` |
 
-> `hosts/` 下的主机目录**必须**带 `.<system>` 后缀（如 `nixos-desktop.x86_64-linux`），framework 不猜测默认架构。
+> `hosts/` 下的主机目录**必须**带 `.<system>` 后缀。package/check/app/shell 可添加 `meta.nix`，通过 `enable` 与 `systems` 控制自动发现。
 
 ### 3. flake.nix 最小示例
 
@@ -126,7 +123,7 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 ```nix
 inputs.cloud.lib.mkFlake {
   inherit inputs;
-  root = ./.; # 可选；通常自动推导，封装调用时可显式指定
+  root = ./.;
   systems = [ "x86_64-linux" "aarch64-linux" ];
   extraOutputs = { };
   extraSpecialArgs = { };
@@ -136,20 +133,35 @@ inputs.cloud.lib.mkFlake {
   nixpkgsConfig = { allowUnfree = true; };
   extraOverlays = [ ];
   embedHomeManager = true;
+  homeManagerUseGlobalPkgs = true;
+  disabledOutputs = [ ];
   moduleRegistries = [ ];
 }
 ```
 
-- `root`：配置仓库根目录，通常从 `mkFlake` 调用位置自动推导；经自定义 helper 封装调用时可显式传入 `./.`。
-- `systems`：生成 `packages`、`checks`、`devShells`、`apps`、`formatter` 等 per-system outputs 的架构列表。
-- `extraOutputs`：与自动生成 outputs 深度合并，作为不符合目录约定时的逃生舱。
-- `extraSpecialArgs`：注入 NixOS、独立 home-manager 和嵌入式 home-manager；嵌入场景写入 `home-manager.extraSpecialArgs`。
+- `root`：配置仓库根目录，通常从调用位置自动推导。
+- `systems`：生成 per-system outputs 的架构列表。
+- `extraOutputs`：与自动生成 outputs 深度合并。
+- `extraSpecialArgs`：注入 NixOS、独立 HM 和嵌入式 HM。
 - `extraModules`：同时追加到每台 NixOS 主机和每个 home。
-- `extraNixosModules` / `extraHomeModules`：仅追加到对应一侧；`extraHomeModules` 同时作用于独立与嵌入式 home。
-- `nixpkgsConfig`：统一设置 `allowUnfree`、`permittedInsecurePackages` 等 nixpkgs 配置。
-- `extraOverlays`：在自动发现的 overlays 之后追加额外 overlay。
-- `embedHomeManager`：默认 `true`；设为 `false` 时仍生成独立 `homeConfigurations`，但不向 NixOS 导入或嵌入 home-manager。
+- `extraNixosModules` / `extraHomeModules`：仅追加到对应一侧。
+- `nixpkgsConfig`：统一设置 `allowUnfree`、`permittedInsecurePackages` 等配置。
+- `extraOverlays`：在自动发现 overlays 之后追加。
+- `embedHomeManager`：控制是否嵌入关联 home，支持 bool、`host: bool` 和 per-host 属性集。
+- `homeManagerUseGlobalPkgs`：控制嵌入式 HM 是否复用 NixOS `pkgs`，同样支持按主机配置。
+- `disabledOutputs`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
 - `moduleRegistries`：按需并入外部模块注册表。
+
+```nix
+embedHomeManager = {
+  default = true;
+  hosts.yc-hk-1 = false;
+};
+
+homeManagerUseGlobalPkgs = host: host != "nixos-desktop";
+```
+
+主机 `meta.nix` 中的 `homeManager.embed` / `homeManager.useGlobalPkgs` 优先于全局策略。也可使用等价的顶层字段 `embedHomeManager` / `homeManagerUseGlobalPkgs`。
 
 ### `mkSystem`
 
@@ -174,6 +186,7 @@ outputs = inputs:
       nixpkgsConfig = { };
       extraOverlays = [ ];
       embedHomeManager = true;
+      homeManagerUseGlobalPkgs = true;
     };
   };
 ```
@@ -209,7 +222,7 @@ outputs = inputs:
 - `mkLib { inherit inputs; }` 返回已绑定当前 flake 的 `cloud` 命名空间。
 - `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数，按完整相对路径字典序稳定遍历。
 - `cloud.patches.local` / `cloud.patches.fromPR` 提供 patch helper。
-- `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `mkModule` 提供显式的 sops-nix 接入助手。
+- `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
 
 ### 注入的模块参数
 
@@ -217,7 +230,19 @@ outputs = inputs:
 
 ### 求值模型
 
-框架对每台主机 / 每个 home 都只做**单次求值**。主机与用户关联、要嵌入哪些 home，均通过目录结构在求值前推导：
+推荐在 `hosts/<name>.<system>/meta.nix` 保存角色与框架策略。该文件是静态属性集；框架无需预执行函数式 host module，`default.nix` 只交给 NixOS module system 正式求值，因此可在外层使用真实 `config`。
+
+```nix
+# hosts/nixos-desktop.x86_64-linux/meta.nix
+{
+  roles = [ "desktop" "development" ];
+  homeManager.useGlobalPkgs = false;
+}
+```
+
+旧的 host module 顶层 `role` / `roles` 等元数据继续兼容，但需要一次占位参数探测。探测失败时框架会发出迁移警告、回退为全量角色注入，并让主机级 Home Manager 策略继续使用全局值；新配置不应依赖该兼容路径。
+
+主机与用户关联仍在正式模块求值前由目录结构推导：
 
 - **NixOS 主机**：从 `hosts/<name>.<system>/` 后缀得到 `system`。
 - **per-host home**：`"<user>@<host>"` 继承对应主机架构。
@@ -251,27 +276,24 @@ outputs = inputs:
 
 ### 组合角色过滤（opt-in）
 
-主机可在 `hosts/<name>.<system>/default.nix` **顶层**声明多个角色。`roles` 是推荐写法；旧的单字符串 `role` 保持兼容：
+推荐在主机静态元数据中声明角色：
 
 ```nix
-# hosts/nixos-desktop.x86_64-linux/default.nix
-{ ... }:
+# hosts/nixos-desktop.x86_64-linux/meta.nix
 {
   roles = [
     "desktop"
     "development"
   ];
-
-  config = { };
 }
 ```
 
 - `modules/<role>/.../nixos.nix` 或 `home.nix`：该角色位于主机 `roles` 时注入。
-- `modules/_common/...`：始终注入，适合共享但只属于单侧的模块。
+- `modules/_common/...`：始终注入。
 - `modules/.../default.nix`：始终注入，保证共享 option 接口可见。
 - 未声明 `roles` / `role` 时，全部配置模块照旧注入。
 
-框架在把主机模块交给 NixOS 前会剥离顶层 `roles` / `role`。角色值应是字符串列表或字符串；无法提前判定时会回退为全量注入。
+旧的 host module 顶层 `role` / `roles` 保持兼容，但会触发旧式元数据探测。若函数式 host module 在外层使用真实 `config`，应迁移到 `meta.nix`，避免探测失败后关闭角色过滤。
 
 ### 额外模块钩子
 
@@ -303,6 +325,8 @@ inputs.cloud.lib.mkFlake {
 - 独立与嵌入式 home-manager 的 `pkgs`；
 - `packages`、`devShells`、`checks`、`apps` 与 `formatter`。
 
+嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。对于 Stylix 等会在 HM 侧设置 overlay 的模块，可按主机关闭 `homeManagerUseGlobalPkgs`；框架会把基础 nixpkgs 配置与 overlays 注入 HM 自己的 nixpkgs。
+
 因此自定义包可以直接依赖 overlay 新增的属性，无需再从 `nixpkgs.legacyPackages` 手动构造另一套包集合：
 
 ```nix
@@ -325,6 +349,8 @@ inputs.cloud.lib.mkFlake {
 - `deploy/default.nix` → 顶层 `deploy`，可用于 deploy-rs 等部署工具的配置。
 
 `apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`cloud`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`cloud`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `extraOutputs` 补充。
+
+自动发现条目可通过 `disabledOutputs` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀继续兼容。
 
 ### 开发体验
 
@@ -370,31 +396,32 @@ inputs.cloud.lib.mkFlake {
 
 ### 主机与用户关联（自动推导）
 
-主机与 home 的关联由目录结构推导，**无需在 host 模块里手写 `config.cloud.users`**：
+主机与 home 的关联由目录结构推导，无需在 host 模块里手写 `config.cloud.users`：
 
-- `homes/<user>/default.nix` 是用户共享 home，同时生成独立 `homeConfigurations.<user>`。
-- `homes/<user>/<host>.nix` 生成独立 `homeConfigurations."<user>@<host>"`，并将用户关联到对应 NixOS 主机。
-- 默认 `embedHomeManager = true` 时，关联的 home 会通过 home-manager NixOS 模块嵌入 `nixosConfigurations.<host>`。
-- 设置 `embedHomeManager = false` 后，两个独立 home outputs 仍照常生成，但 NixOS 不再导入 home-manager，适合只使用 `home-manager switch` 的仓库。
+- `homes/<user>/default.nix` 是共享 home，同时生成 `homeConfigurations.<user>`。
+- `homes/<user>/<host>.nix` 生成 `homeConfigurations."<user>@<host>"`，并将用户关联到对应主机。
+- 默认嵌入关联 home；关闭嵌入只影响 NixOS，独立 home output 仍然保留。
+
+每台主机可以单独配置：
 
 ```nix
-# homes/rhencloud/nixos-desktop.nix
-{ ... }:
+# hosts/yc-hk-1.x86_64-linux/meta.nix
 {
-  # 仅该主机专属的 home 配置
+  roles = [ "server" ];
+  homeManager.embed = false;
 }
 ```
 
+也可从 flake 统一定义策略：
+
 ```nix
-# flake.nix
-outputs = inputs:
-  inputs.cloud.lib.mkFlake {
-    inherit inputs;
-    embedHomeManager = false;
-  };
+embedHomeManager = {
+  default = true;
+  hosts.yc-hk-1 = false;
+};
 ```
 
-`cloud.users` 由框架写入推导结果，模块可读取但不应手动赋值。
+`homeManagerUseGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`cloud.users` 由框架写入推导结果，模块可读取但不应手动赋值。
 
 ## Overlays 与打补丁
 
@@ -460,9 +487,32 @@ outputs = inputs:
 - `cloud.sops.commonFile`；
 - `cloud.sops.hostFile host`；
 - `cloud.sops.defaultFile host`；
+- `cloud.sops.secret { source = "common" | "host"; host ? null; name ? null; }`；
 - `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`。
 
-需要自定义位置或自行组合密钥时，显式传入 `defaultSopsFile`。sops-nix 的 `sops.secrets` 本身也允许逐个 secret 指定 `sopsFile`。
+传入 `name` 时，helper 直接返回可导入的模块片段：
+
+```nix
+imports = [
+  (cloud.sops.secret {
+    source = "common";
+    name = "password-hash";
+  })
+  (cloud.sops.secret {
+    source = "host";
+    host = "nixos-desktop";
+    name = "mihomo-proxies";
+  })
+];
+```
+
+省略 `name` 时返回单个 secret 的 option 属性集，也可直接赋值：
+
+```nix
+sops.secrets.password-hash = cloud.sops.secret { source = "common"; };
+```
+
+`secret` 只减少路径样板，不会合并 YAML。需要自定义位置时显式传入 `defaultSopsFile` 或逐个设置 `sopsFile`。
 
 ## 常见用法
 
@@ -477,8 +527,10 @@ home-manager switch --flake .#rhencloud
 home-manager switch --flake .#rhencloud@nixos-desktop
 
 # 构建隔离检查（CI）
-nix flake check
+nix flake check path:. --show-trace
 ```
+
+框架会生成 `checks.<system>.cloud-discovery` 验证自动发现结果。`deploy`、`homeModules`、`images`、`options` 等自定义 output 在部分 Nix 版本中可能产生 `unknown flake output` 警告；这是预期提示，不等同于 check 失败。
 
 ## 与其他框架对比
 

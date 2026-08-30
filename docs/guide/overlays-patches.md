@@ -48,6 +48,15 @@ outputs = inputs:
 
 框架不再让自动发现的 package 单独使用未经配置的 `nixpkgs.legacyPackages`，从而避免 NixOS、home-manager 与其他 outputs 的包集合不一致。
 
+嵌入式 HM 默认使用 `home-manager.useGlobalPkgs = true`。若 Stylix 等 HM 模块需要设置自己的 overlay，可全局或按主机设置 `homeManagerUseGlobalPkgs = false`。框架会把基础 `nixpkgsConfig` 与 overlays 注入 HM 自己的 nixpkgs，避免丢失统一配置：
+
+```nix
+# hosts/nixos-desktop.x86_64-linux/meta.nix
+{
+  homeManager.useGlobalPkgs = false;
+}
+```
+
 ## patch helper
 
 - `cloud.patches.local path`：本地 `.patch` 文件，路径透传。

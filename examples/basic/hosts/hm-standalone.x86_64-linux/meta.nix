@@ -1,0 +1,4 @@
+{
+  roles = [ "server" ];
+  embedHomeManager = false;
+}

@@ -71,6 +71,32 @@
         embedHomeManager = false;
       };
 
+      exampleFlakeHostPolicy = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        embedHomeManager = {
+          default = true;
+          hosts.nixos-desktop = false;
+        };
+      };
+      exampleFlakeDisabled = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        disabledOutputs = [
+          "apps.hello"
+          "checks.example"
+          "deploy"
+          "formatter"
+          "packages.overlay-consumer"
+        ];
+      };
+
+      exampleFlakeAarch64Only = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        systems = [ "aarch64-linux" ];
+      };
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -81,10 +107,16 @@
         let
           pkgs = nixpkgs.legacyPackages.${sys};
           exampleHost = exampleFlake.nixosConfigurations.nixos-desktop;
+          exampleStandaloneHost = exampleFlake.nixosConfigurations.hm-standalone;
+          examplePolicyHost = exampleFlakeHostPolicy.nixosConfigurations.nixos-desktop;
           exampleHome = exampleFlake.homeConfigurations."rhencloud@nixos-desktop";
+          exampleStandaloneHome = exampleFlake.homeConfigurations."rhencloud@hm-standalone";
           exampleHomeGlobal = exampleFlake.homeConfigurations.rhencloud;
           examplePkg = exampleFlake.packages.${sys}.hello;
           exampleOverlayPkg = exampleFlake.packages.${sys}.overlay-consumer;
+          exampleDottedPkg = exampleFlake.packages.${sys}."dotted.x86_64-linux";
+          exampleSystemLayoutPkg = exampleFlake.packages.x86_64-linux.system-layout;
+          exampleDiscoveredCheck = exampleFlake.checks.${sys}.example;
           exampleDevshell = exampleFlake.devShells.${sys}.default;
           exampleOverlay = exampleFlake.overlays.example;
           exampleLib = exampleFlake.lib.example.shout;
@@ -100,6 +132,20 @@
               host = "nixos-desktop";
             })
               { };
+          exampleSopsCommon = exampleBound.sops.secret { source = "common"; };
+          exampleSopsHost = exampleBound.sops.secret {
+            source = "host";
+            host = "nixos-desktop";
+          };
+          exampleSopsNamedCommon = exampleBound.sops.secret {
+            source = "common";
+            name = "password-hash";
+          };
+          exampleSopsNamedHost = exampleBound.sops.secret {
+            source = "host";
+            host = "nixos-desktop";
+            name = "mihomo-proxies";
+          };
           exampleBasicReal = (import ./examples/basic/flake.nix).outputs {
             self = {
               outPath = ./examples/basic;
@@ -143,9 +189,92 @@
             fi
             printf '%s\n' "${exampleNoEmbedHome.config.home.username}" > "$out"
           '';
+          homeHostPolicies = pkgs.runCommand "cloud-home-host-policies" { } ''
+            test "${if exampleHost.config.home-manager.useGlobalPkgs then "yes" else "no"}" = "no"
+            if [ "${
+              if builtins.hasAttr "home-manager" exampleStandaloneHost.options then "yes" else "no"
+            }" = "yes" ]; then
+              echo "host meta 禁用嵌入后仍注入了 home-manager 模块" >&2
+              exit 1
+            fi
+            if [ "${
+              if builtins.hasAttr "home-manager" examplePolicyHost.options then "yes" else "no"
+            }" = "yes" ]; then
+              echo "per-host embedHomeManager 策略未生效" >&2
+              exit 1
+            fi
+            test "${exampleStandaloneHome.config.home.sessionVariables.CLOUD_STANDALONE}" = "1"
+            printf '%s\n' "${exampleStandaloneHome.config.home.username}" > "$out"
+          '';
           package = pkgs.runCommand "cloud-package" { } ''
             test "$(cat ${exampleOverlayPkg})" = "overlay-ok"
             printf '%s\n' "${examplePkg.name}" > "$out"
+          '';
+          outputcontrol = pkgs.runCommand "cloud-output-control" { } ''
+            test -n "${exampleDottedPkg.drvPath}"
+            test -n "${exampleDiscoveredCheck.drvPath}"
+            if [ "${
+              if builtins.hasAttr "disabled-by-meta" exampleFlake.packages.${sys} then "yes" else "no"
+            }" = "yes" ]; then
+              echo "meta.enable = false 的 package 仍被输出" >&2
+              exit 1
+            fi
+            if [ "${if sys == "x86_64-linux" then "yes" else "no"}" = "yes" ]; then
+              test -n "${exampleSystemLayoutPkg.drvPath}"
+              test -n "${exampleFlake.packages.${sys}.legacy-only.drvPath}"
+            elif [ "${
+              if builtins.hasAttr "system-layout" exampleFlake.packages.${sys} then "yes" else "no"
+            }" = "yes" ]; then
+              echo "system-first package 出现在错误架构" >&2
+              exit 1
+            elif [ "${
+              if builtins.hasAttr "legacy-only" exampleFlake.packages.${sys} then "yes" else "no"
+            }" = "yes" ]; then
+              echo "旧式 system 后缀 package 出现在错误架构" >&2
+              exit 1
+            fi
+            if [ "${
+              if builtins.hasAttr "legacy-only.x86_64-linux" exampleFlakeAarch64Only.packages.aarch64-linux then
+                "yes"
+              else
+                "no"
+            }" = "yes" ]; then
+              echo "未启用的旧式 system 后缀被误识别为完整包名" >&2
+              exit 1
+            fi
+            if [ "${
+              if builtins.hasAttr "overlay-consumer" exampleFlakeDisabled.packages.${sys} then "yes" else "no"
+            }" = "yes" ]; then
+              echo "disabledOutputs 未禁用 package" >&2
+              exit 1
+            fi
+            if [ "${
+              if builtins.hasAttr "example" exampleFlakeDisabled.checks.${sys} then "yes" else "no"
+            }" = "yes" ]; then
+              echo "disabledOutputs 未禁用 check" >&2
+              exit 1
+            fi
+            if [ "${
+              if
+                builtins.hasAttr "apps" exampleFlakeDisabled
+                && builtins.hasAttr "hello" exampleFlakeDisabled.apps.${sys}
+              then
+                "yes"
+              else
+                "no"
+            }" = "yes" ]; then
+              echo "disabledOutputs 未禁用 app" >&2
+              exit 1
+            fi
+            if [ "${if builtins.hasAttr "formatter" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
+              echo "disabledOutputs 未禁用 formatter" >&2
+              exit 1
+            fi
+            if [ "${if builtins.hasAttr "deploy" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
+              echo "disabledOutputs 未禁用 deploy" >&2
+              exit 1
+            fi
+            printf '%s\n' "${exampleDottedPkg.name}" > "$out"
           '';
           overlay = pkgs.runCommand "cloud-overlay" { } ''
             printf '%s\n' "${if builtins.isFunction exampleOverlay then "ok" else "bad"}" > "$out"
@@ -196,6 +325,10 @@
           '';
           sops = pkgs.runCommand "cloud-sops" { } ''
             test "${exampleSopsModule.sops.defaultSopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
+            test "${exampleSopsCommon.sopsFile}" = "${toString ./examples/basic}/secrets/common.yaml"
+            test "${exampleSopsHost.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
+            test "${exampleSopsNamedCommon.sops.secrets.password-hash.sopsFile}" = "${toString ./examples/basic}/secrets/common.yaml"
+            test "${exampleSopsNamedHost.sops.secrets.mihomo-proxies.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             printf '%s\n' "${exampleSopsModule.sops.defaultSopsFile}" > "$out"
           '';
           examplereal = pkgs.runCommand "cloud-example-real" { } ''
