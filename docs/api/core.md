@@ -179,7 +179,8 @@ inputs.cloud.lib.mkLib { inherit inputs; }
 ## Patch helper
 
 - `cloud.patches.local path`
-- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`
+- `cloud.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }` — 固定到具体 commit，可复现；**推荐**
+- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }` — **已弃用**，PR 再次推送后 hash 改变；请改用 `fromCommit`
 
 ## SOPS helper
 

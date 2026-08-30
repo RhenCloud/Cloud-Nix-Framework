@@ -8,23 +8,48 @@
 
 因此 `packages/<name>/default.nix` 可以直接通过函数参数使用 overlay 新增的包。
 
+## Overlay 文件签名
+
+框架支持两种 overlay 文件签名：
+
+**标准 nixpkgs overlay**（直接返回 `final: prev:` 函数）：
+
 ```nix
 # overlays/foo/default.nix
-{ cloud }: final: prev: {
+final: prev: {
+  foo = prev.foo.override { bar = true; };
+}
+```
+
+**带框架参数的扩展签名**（第一个参数接收 `{ inputs, self, cloud }`）：
+
+```nix
+# overlays/foo/default.nix
+extras: final: prev: {
   foo = prev.foo.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
-      (cloud.patches.local ./fix.patch)
-      (cloud.patches.fromPR {
+      (extras.cloud.patches.local ./fix.patch)
+      (extras.cloud.patches.fromCommit {
         inherit (prev) fetchpatch;
         owner = "NixOS";
         repo = "nixpkgs";
-        pr = 123456;
+        rev = "abc123def456";
         hash = "sha256-...";
       })
     ];
   });
 }
 ```
+
+也可使用解构参数：
+
+```nix
+{ cloud, inputs, self }: final: prev: {
+  ...
+}
+```
+
+框架通过 `functionArgs` 检测解构签名（参数名含 `inputs`、`self` 或 `cloud`）；若检测不到，则尝试以 `{ inherit inputs self cloud; }` 调用，如返回函数则视为扩展签名，否则当作普通 overlay 使用。
 
 ## 统一 nixpkgs 配置
 
@@ -57,10 +82,32 @@ outputs = inputs:
 }
 ```
 
-## patch helper
+::: warning Stylix 兼容说明
+
+Stylix 的某些模块（`nixos-icons`、`gtksourceview`）会在 HM 侧设置 overlay。启用 `useGlobalPkgs = true` 时会触发 Home Manager 警告：
+
+> You have set either nixpkgs.config or nixpkgs.overlays while using home-manager.useGlobalPkgs. This will soon not be possible.
+
+此警告来自 Stylix 本身，不是框架重复配置。如需消除警告，请对包含 Stylix 的主机设置 `homeManager.useGlobalPkgs = false`。
+
+:::
+
+## Patch helper
 
 - `cloud.patches.local path`：本地 `.patch` 文件，路径透传。
-- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：构造 GitHub PR patch URL 并通过 `fetchpatch` 拉取。`hash` 应固定以保证可复现。
+- `cloud.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }`：固定到具体 commit，可复现性高。推荐用法。
+- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：**已弃用**，PR 再次推送后 hash 变化；请改用 `fromCommit`。
+
+```nix
+# 推荐：固定到 commit hash
+cloud.patches.fromCommit {
+  inherit (prev) fetchpatch;
+  owner = "NixOS";
+  repo = "nixpkgs";
+  rev = "abc123def456abc123def456abc123def456abc1";
+  hash = "sha256-...";
+}
+```
 
 ## 多版本包
 

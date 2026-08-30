@@ -1,6 +1,4 @@
-{
-  lib,
-}:
+{ lib }:
 
 let
   fs = import ./fs.nix { inherit lib; };
@@ -12,6 +10,7 @@ let
   ];
 
   forAllSystems = systems: f: lib.genAttrs systems f;
+
   renderOptions =
     opts:
     let
@@ -45,36 +44,20 @@ let
           o;
     in
     lib.mapAttrs (k: go) opts;
+
   optionsCloud =
-    {
-      lib,
-      ...
-    }:
+    { lib, ... }:
     {
       options.cloud = {
         users = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
         };
-        images = lib.mkOption {
-          type = lib.types.submodule {
-            options.formats = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [ ];
-              description = "需要生成的镜像变体列表，对应 nixpkgs 的 image.modules 变体名（如 iso、raw、oci 等）";
-            };
-          };
-          default = { };
-          description = "镜像生成配置，由框架映射为 `images.<host>.<format>` 输出";
-        };
       };
     };
 
   optionsCloudHome =
-    {
-      lib,
-      ...
-    }:
+    { lib, ... }:
     {
       options.cloud = {
         users = lib.mkOption {
@@ -96,171 +79,64 @@ let
       nixosSystem = nixpkgs.lib.nixosSystem;
       hm = inputs.home-manager or null;
       projectRoot = if root == null then toString self.outPath else toString root;
-      channels = {
-        inherit nixpkgs;
+      channels = { inherit nixpkgs; };
+
+      discovered = import ./discover.nix {
+        inherit
+          lib
+          fs
+          projectRoot
+          moduleRegistries
+          ;
       };
 
-      listDirAt =
-        rel:
-        if builtins.pathExists (projectRoot + "/" + rel) then fs.listDir (projectRoot + "/" + rel) else [ ];
-      onlyDirs = es: lib.filter (e: e.type == "directory") es;
-      onlyFiles = es: lib.filter (e: e.type == "regular") es;
-      nixFiles = es: lib.filter (e: lib.hasSuffix ".nix" e.name) (onlyFiles es);
-      readMetadata =
+      hostMeta = import ./host.nix {
+        inherit lib discovered;
+      };
+
+      sops' = import ./sops.nix { inherit projectRoot; };
+      cloudInject = {
+        inherit patches;
+        sops = sops';
+      };
+      cloud = cloudInject;
+
+      # overlays: 支持两种签名
+      #   final: prev: { ... }                      标准 nixpkgs overlay
+      #   extras: final: prev: ...                  带框架参数的扩展签名（extras = { inputs, self, cloud }）
+      #   { inputs, self, cloud }: final: prev: ... 带框架参数的解构签名
+      loadOverlay =
         path:
-        if !builtins.pathExists path then
-          { }
+        let
+          imported = import path;
+          argNames = builtins.functionArgs imported;
+          isStructuredArgs = argNames ? inputs || argNames ? self || argNames ? cloud;
+        in
+        if isStructuredArgs then
+          imported { inherit inputs self cloud; }
         else
           let
-            value = import path;
+            result = builtins.tryEval (imported {
+              inherit inputs self cloud;
+            });
           in
-          if builtins.isAttrs value && !builtins.isFunction value then
-            value
-          else
-            throw "元数据文件 '${toString path}' 必须直接返回属性集";
-      namedOutputsAt =
-        dir:
-        map
-          (d: {
-            inherit (d) name;
-            path = projectRoot + "/${dir}/" + d.name + "/default.nix";
-            meta = readMetadata (projectRoot + "/${dir}/" + d.name + "/meta.nix");
-          })
-          (
-            lib.filter (d: builtins.pathExists (projectRoot + "/${dir}/" + d.name + "/default.nix")) (
-              onlyDirs (listDirAt dir)
-            )
-          );
+          if result.success && builtins.isFunction result.value then result.value else imported;
 
-      discovered =
-        let
-          localGroupedModules =
-            if builtins.pathExists (projectRoot + "/modules") then
-              fs.groupModules (projectRoot + "/modules")
-            else
-              {
-                nixos = { };
-                home = { };
-              };
-          localAutoModules = {
-            nixos = lib.concatLists (lib.attrValues localGroupedModules.nixos);
-            home = lib.concatLists (lib.attrValues localGroupedModules.home);
-          };
-          registryModules =
-            lib.foldl
-              (acc: r: {
-                nixos = acc.nixos ++ (r.modules.nixos or [ ]);
-                home = acc.home ++ (r.modules.home or [ ]);
-              })
-              {
-                nixos = [ ];
-                home = [ ];
-              }
-              moduleRegistries;
-        in
+      overlays = lib.listToAttrs (
+        map (o: lib.nameValuePair o.name (loadOverlay o.path)) discovered.overlays
+      );
+      overlayList = lib.attrValues overlays;
+
+      pkgsFor =
         {
-          inherit localAutoModules localGroupedModules registryModules;
-
-          hosts = map (
-            e:
-            let
-              parts = lib.splitString "." e.name;
-            in
-            {
-              dir = e.name;
-              name = lib.concatStringsSep "." (lib.init parts);
-              system = lib.last parts;
-              path = projectRoot + "/hosts/" + e.name + "/default.nix";
-              metaPath = projectRoot + "/hosts/" + e.name + "/meta.nix";
-            }
-          ) (onlyDirs (listDirAt "hosts"));
-
-          homes = map (d: {
-            user = d.name;
-            hosts = lib.filter (f: f != null) (
-              map (f: if f.name == "default.nix" then null else lib.removeSuffix ".nix" f.name) (
-                nixFiles (listDirAt ("homes/" + d.name))
-              )
-            );
-          }) (onlyDirs (listDirAt "homes"));
-
-          packages =
-            let
-              roots = onlyDirs (listDirAt "packages");
-              direct =
-                map
-                  (d: {
-                    inherit (d) name;
-                    path = projectRoot + "/packages/" + d.name + "/default.nix";
-                    meta = readMetadata (projectRoot + "/packages/" + d.name + "/meta.nix");
-                    explicitSystem = null;
-                  })
-                  (lib.filter (d: builtins.pathExists (projectRoot + "/packages/" + d.name + "/default.nix")) roots);
-              systemFirst = lib.concatMap (
-                systemDir:
-                if builtins.pathExists (projectRoot + "/packages/" + systemDir.name + "/default.nix") then
-                  [ ]
-                else
-                  map
-                    (d: {
-                      inherit (d) name;
-                      path = projectRoot + "/packages/" + systemDir.name + "/" + d.name + "/default.nix";
-                      meta = readMetadata (projectRoot + "/packages/" + systemDir.name + "/" + d.name + "/meta.nix");
-                      explicitSystem = systemDir.name;
-                    })
-                    (
-                      lib.filter (
-                        d: builtins.pathExists (projectRoot + "/packages/" + systemDir.name + "/" + d.name + "/default.nix")
-                      ) (onlyDirs (listDirAt ("packages/" + systemDir.name)))
-                    )
-              ) roots;
-            in
-            direct ++ systemFirst;
-
-          overlays =
-            map
-              (d: {
-                inherit (d) name;
-                path = projectRoot + "/overlays/" + d.name + "/default.nix";
-              })
-              (
-                lib.filter (d: builtins.pathExists (projectRoot + "/overlays/" + d.name + "/default.nix")) (
-                  onlyDirs (listDirAt "overlays")
-                )
-              );
-
-          apps = namedOutputsAt "apps";
-
-          formatter =
-            let
-              path = projectRoot + "/formatter/default.nix";
-            in
-            if builtins.pathExists path then
-              {
-                inherit path;
-                meta = readMetadata (projectRoot + "/formatter/meta.nix");
-              }
-            else
-              null;
-
-          deploy =
-            let
-              path = projectRoot + "/deploy/default.nix";
-            in
-            if builtins.pathExists path then
-              {
-                inherit path;
-                meta = readMetadata (projectRoot + "/deploy/meta.nix");
-              }
-            else
-              null;
-
-          shells = namedOutputsAt "shells";
-
-          checks = namedOutputsAt "checks";
-
-          libFiles = nixFiles (listDirAt "lib");
-
+          system,
+          nixpkgsConfig ? { },
+          extraOverlays ? [ ],
+        }:
+        import nixpkgs {
+          inherit system;
+          config = nixpkgsConfig;
+          overlays = overlayList ++ extraOverlays;
         };
 
       importFile =
@@ -271,220 +147,22 @@ let
           args = builtins.intersectAttrs declared {
             inherit
               lib
-              self
               inputs
+              self
               cloud
               ;
           };
         in
         if builtins.isFunction imported then imported args else imported;
 
-      sops' = rec {
-        commonFile = projectRoot + "/secrets/common.yaml";
-        hostFile = host: projectRoot + "/secrets/hosts/${host}.yaml";
-        defaultFile = host: if host == null then commonFile else hostFile host;
-        secret =
-          {
-            source,
-            host ? null,
-            name ? null,
-          }:
-          let
-            options = {
-              sopsFile =
-                if source == "common" then
-                  commonFile
-                else if source == "host" && host != null then
-                  hostFile host
-                else if source == "host" then
-                  throw "cloud.sops.secret 使用 source = \"host\" 时必须传入 host"
-                else
-                  throw "cloud.sops.secret.source 必须是 \"common\" 或 \"host\"";
-            };
-          in
-          if name == null then
-            options
-          else if builtins.isString name && name != "" then
-            {
-              sops.secrets.${name} = options;
-            }
-          else
-            throw "cloud.sops.secret.name 必须是非空字符串";
-        mkModule =
-          {
-            sopsNixModule,
-            host ? null,
-            defaultSopsFile ? defaultFile host,
-          }:
-          {
-            ...
-          }:
-          {
-            imports = [ sopsNixModule ];
-            sops = {
-              defaultSopsFormat = "yaml";
-              inherit defaultSopsFile;
-            };
-          };
-      };
-
-      cloudInject = {
-        inherit patches;
-        sops = sops';
-      };
-      cloud = cloudInject;
-
-      overlays = lib.listToAttrs (
-        map (
-          o: lib.nameValuePair o.name ((import o.path) { inherit inputs self cloud; })
-        ) discovered.overlays
-      );
-      overlayList = lib.attrValues overlays;
-
-      pkgsFor =
-        {
-          system,
-          nixpkgsConfig ? { },
-          extraOverlays ? [ ],
-        }:
-        import nixpkgs.outPath {
-          inherit system;
-          config = nixpkgsConfig;
-          overlays = overlayList ++ extraOverlays;
-        };
-
-      resolveHost =
-        host:
+      callPackage =
+        pkgs: path:
         let
-          matches = lib.filter (h: h.name == host) discovered.hosts;
+          fn = import path;
+          declared = builtins.functionArgs fn;
+          extras = lib.intersectAttrs declared { inherit inputs self cloud; };
         in
-        if matches == [ ] then
-          throw "未发现主机 '${host}'，请在 hosts/${host}.<system>/ 下创建 default.nix"
-        else
-          lib.head matches;
-
-      normalizeRoles =
-        roles:
-        if roles == null then
-          null
-        else if builtins.isString roles then
-          [ roles ]
-        else if builtins.isList roles && lib.all builtins.isString roles then
-          roles
-        else
-          throw "主机 role/roles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf roles}";
-
-      normalizeHostMetadata =
-        raw:
-        let
-          homeManagerMeta = raw.homeManager or { };
-          fromConfig =
-            if raw ? config && builtins.isAttrs raw.config && !(builtins.isFunction raw.config) then
-              raw.config.cloud.roles or raw.config.cloud.role or null
-            else
-              null;
-        in
-        {
-          roles = normalizeRoles (raw.roles or raw.role or fromConfig);
-          embedHomeManager = raw.embedHomeManager or homeManagerMeta.embed or null;
-          homeManagerUseGlobalPkgs = raw.homeManagerUseGlobalPkgs or homeManagerMeta.useGlobalPkgs or null;
-        };
-
-      hostMetadataFor =
-        {
-          host,
-          pkgs,
-        }:
-        let
-          hostRec = resolveHost host;
-        in
-        if builtins.pathExists hostRec.metaPath then
-          normalizeHostMetadata (readMetadata hostRec.metaPath)
-        else
-          let
-            hostArgs = {
-              inherit
-                lib
-                self
-                inputs
-                pkgs
-                ;
-              config = null;
-              options = null;
-              modules = null;
-              name = null;
-            };
-            attempt = builtins.tryEval (
-              let
-                imported = import hostRec.path;
-                mod = if builtins.isFunction imported then imported hostArgs else imported;
-                metadata = normalizeHostMetadata mod;
-              in
-              builtins.deepSeq metadata metadata
-            );
-          in
-          if attempt.success then
-            attempt.value
-          else
-            builtins.trace "警告：主机 '${host}' 的旧式顶层元数据探测失败，角色过滤已关闭；请迁移到 hosts/${hostRec.dir}/meta.nix" (
-              normalizeHostMetadata { }
-            );
-
-      resolveHostPolicy =
-        {
-          name,
-          value,
-          host,
-          default,
-        }:
-        let
-          resolved =
-            if builtins.isBool value then
-              value
-            else if builtins.isFunction value then
-              value host
-            else if builtins.isAttrs value && value ? hosts then
-              value.hosts.${host} or value.default or default
-            else if builtins.isAttrs value then
-              value.${host} or value.default or default
-            else
-              throw "${name} 必须是布尔值、host -> bool 函数或 per-host 属性集";
-        in
-        if builtins.isBool resolved then resolved else throw "${name} 为主机 '${host}' 解析出的值必须是布尔值";
-
-      hostPolicyFromMetadata =
-        {
-          metadata,
-          key,
-          fallback,
-          host,
-        }:
-        let
-          value = metadata.${key};
-        in
-        if value == null then
-          fallback
-        else if builtins.isBool value then
-          value
-        else
-          throw "主机 '${host}' 的 ${key} 元数据必须是布尔值";
-
-      rolesFor =
-        {
-          host,
-          pkgs,
-        }:
-        (hostMetadataFor { inherit host pkgs; }).roles;
-
-      relUnderModules = p: lib.removePrefix (projectRoot + "/modules/") p;
-      roleOfPath = p: lib.head (lib.splitString "/" (relUnderModules p));
-      isDefaultFile = p: baseNameOf p == "default.nix";
-      isCommon = p: lib.hasPrefix "_" (roleOfPath p);
-      filterRoles =
-        roles: paths:
-        lib.filter (
-          p: isDefaultFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
-        ) paths;
+        pkgs.callPackage fn extras;
 
       specialArgsFor =
         extraSpecialArgs:
@@ -499,6 +177,16 @@ let
         // extraSpecialArgs;
 
       usersForHost = host: map (h: h.user) (lib.filter (h: lib.elem host h.hosts) discovered.homes);
+
+      relUnderModules = p: lib.last (lib.splitString "/modules/" p);
+      isDefaultFile = p: baseNameOf p == "default.nix";
+      isCommon = p: lib.hasPrefix "_" (lib.head (lib.splitString "/" (relUnderModules p)));
+      roleOfPath = p: lib.head (lib.splitString "/" (relUnderModules p));
+      filterRoles =
+        roles: paths:
+        lib.filter (
+          p: isDefaultFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
+        ) paths;
 
       homeModulesFor =
         {
@@ -519,16 +207,21 @@ let
         ++ ownDefault
         ++ ownHost;
 
-      callPackage =
-        pkgs: path:
-        let
-          fn = import path;
-          declared = builtins.functionArgs fn;
-          extras = lib.intersectAttrs declared {
-            inherit inputs self cloud;
-          };
-        in
-        pkgs.callPackage fn extras;
+      frameworkMetadataKeys = [
+        "role"
+        "roles"
+        "embedHomeManager"
+        "homeManagerUseGlobalPkgs"
+        "homeManager"
+      ];
+      stripMeta =
+        hostRaw:
+        if builtins.isFunction hostRaw then
+          lib.setFunctionArgs (args: builtins.removeAttrs (hostRaw args) frameworkMetadataKeys) (
+            builtins.functionArgs hostRaw
+          )
+        else
+          builtins.removeAttrs hostRaw frameworkMetadataKeys;
 
       mkSystem =
         {
@@ -545,7 +238,7 @@ let
           homeManagerUseGlobalPkgs ? true,
         }:
         let
-          hostRecord = resolveHost host;
+          hostRecord = hostMeta.resolveHost host;
           sys = if system == null then hostRecord.system else system;
           pkgs = pkgsFor {
             system = sys;
@@ -555,44 +248,30 @@ let
           specialArgs = specialArgsFor extraSpecialArgs;
           users = usersForHost host;
 
-          metadata = hostMetadataFor { inherit host pkgs; };
+          metadata = hostMeta.hostMetadataFor { inherit host pkgs; };
           inherit (metadata) roles;
-          embedForHost = hostPolicyFromMetadata {
+          embedForHost = hostMeta.hostPolicyFromMetadata {
             inherit metadata host;
             key = "embedHomeManager";
-            fallback = resolveHostPolicy {
+            fallback = hostMeta.resolveHostPolicy {
               name = "embedHomeManager";
               value = embedHomeManager;
               inherit host;
               default = true;
             };
           };
-          useGlobalPkgs = hostPolicyFromMetadata {
+          useGlobalPkgs = hostMeta.hostPolicyFromMetadata {
             inherit metadata host;
             key = "homeManagerUseGlobalPkgs";
-            fallback = resolveHostPolicy {
+            fallback = hostMeta.resolveHostPolicy {
               name = "homeManagerUseGlobalPkgs";
               inherit host;
               value = homeManagerUseGlobalPkgs;
               default = true;
             };
           };
-          frameworkMetadataKeys = [
-            "role"
-            "roles"
-            "embedHomeManager"
-            "homeManagerUseGlobalPkgs"
-            "homeManager"
-          ];
-          hostRaw = import hostModule;
-          hostMod =
-            if builtins.isFunction hostRaw then
-              lib.setFunctionArgs (args: builtins.removeAttrs (hostRaw args) frameworkMetadataKeys) (
-                builtins.functionArgs hostRaw
-              )
-            else
-              builtins.removeAttrs hostRaw frameworkMetadataKeys;
 
+          hostMod = stripMeta (import hostModule);
           hostModules =
             filterRoles roles discovered.localAutoModules.nixos
             ++ discovered.registryModules.nixos
@@ -602,7 +281,7 @@ let
             imports = [
               (
                 if hm == null then
-                  throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " users}），但缺少 home-manager input，请在 flake inputs 中 follows"
+                  throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " users}），但缺少 home-manager input"
                 else
                   hm.nixosModules.home-manager
               )
@@ -632,18 +311,12 @@ let
             };
           };
 
-          setCloudModule = _: {
-            config.cloud.users = users;
-          };
+          setCloudModule = _: { config.cloud.users = users; };
 
           finalModules = [
             optionsCloud
             setCloudModule
-            (_: {
-              nixpkgs = {
-                inherit pkgs;
-              };
-            })
+            (_: { nixpkgs = { inherit pkgs; }; })
           ]
           ++ lib.optionals (embedForHost && users != [ ]) [ embedModule ]
           ++ hostModules
@@ -674,7 +347,7 @@ let
             if hm == null then throw "mkHome 需要 home-manager input，请在 flake inputs 中 follows" else hm.lib;
           sys =
             if host != null then
-              (resolveHost host).system
+              (hostMeta.resolveHost host).system
             else if system != null then
               system
             else
@@ -683,7 +356,7 @@ let
             system = sys;
             inherit nixpkgsConfig extraOverlays;
           };
-          roles = if host == null then null else rolesFor { inherit host pkgs; };
+          roles = if host == null then null else hostMeta.rolesFor { inherit host pkgs; };
         in
         hmLib.homeManagerConfiguration {
           inherit pkgs;
@@ -743,6 +416,7 @@ let
               lib.elem name (disabledOutputs.${kind} or [ ])
             else
               throw "disabledOutputs 必须是字符串列表或 output 名到名称列表的属性集";
+
           disabledForSystem =
             kind: name: system:
             disabledByName kind name
@@ -753,6 +427,7 @@ let
               else
                 lib.elem "${system}.${name}" (disabledOutputs.${kind} or [ ])
             );
+
           metadataEnabled =
             {
               kind,
@@ -775,13 +450,12 @@ let
               enabled
               && (supportedSystems == null || lib.elem system supportedSystems)
               && !disabledForSystem kind name system;
+
           uniqueDefinitions =
             kind: system: definitions:
             let
-              names = map (definition: definition.name) definitions;
-              duplicates = lib.unique (
-                lib.filter (name: lib.count (candidate: candidate == name) names > 1) names
-              );
+              names = map (d: d.name) definitions;
+              duplicates = lib.unique (lib.filter (n: lib.count (c: c == n) names > 1) names);
             in
             if duplicates == [ ] then
               definitions
@@ -837,9 +511,7 @@ let
                 ) packageDefs
               );
             in
-            lib.listToAttrs (
-              map (package: lib.nameValuePair package.name (callPackage pkgs package.path)) definitions
-            )
+            lib.listToAttrs (map (p: lib.nameValuePair p.name (callPackage pkgs p.path)) definitions)
           );
 
           namedSystemOutputs =
@@ -852,23 +524,21 @@ let
                   inherit nixpkgsConfig extraOverlays;
                 };
                 enabled = lib.filter (
-                  definition:
+                  d:
                   metadataEnabled {
                     inherit kind;
-                    inherit (definition) name meta;
+                    inherit (d) name meta;
                     system = sys;
                   }
                 ) definitions;
               in
-              lib.listToAttrs (
-                map (definition: lib.nameValuePair definition.name (callPackage pkgs definition.path)) enabled
-              )
+              lib.listToAttrs (map (d: lib.nameValuePair d.name (callPackage pkgs d.path)) enabled)
             );
 
           devShells = namedSystemOutputs "devShells" discovered.shells;
           discoveredChecks = namedSystemOutputs "checks" discovered.checks;
           apps = namedSystemOutputs "apps" discovered.apps;
-          appsEnabled = lib.any (system: apps.${system} != { }) systems;
+          appsEnabled = lib.any (sys: apps.${sys} != { }) systems;
 
           formatter = lib.listToAttrs (
             lib.concatMap (
@@ -965,7 +635,8 @@ let
           images = lib.mapAttrs (
             host: cfg:
             let
-              fmts = cfg.config.cloud.images.formats;
+              hostRec = hostMeta.resolveHost host;
+              fmts = hostRec.meta.images.formats or cfg.config.cloud.images.formats;
               avail = cfg.config.system.build.images;
             in
             lib.genAttrs fmts (
@@ -1024,10 +695,12 @@ let
         lib.recursiveUpdate generated extraOutputs;
     in
     {
-      inherit mkFlake;
-      inherit mkSystem;
-      inherit mkHome;
-      inherit forAllSystems;
+      inherit
+        mkFlake
+        mkSystem
+        mkHome
+        forAllSystems
+        ;
       inherit (fs) importModules flattenTree groupModules;
       inherit patches;
       sops = sops';
@@ -1056,10 +729,12 @@ let
       );
 in
 {
-  inherit mkLib;
-  inherit mkFlake;
-  inherit forAllSystems;
-  inherit renderOptions;
+  inherit
+    mkLib
+    mkFlake
+    forAllSystems
+    renderOptions
+    ;
   inherit (fs) importModules flattenTree groupModules;
   inherit patches;
 }

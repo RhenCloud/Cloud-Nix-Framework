@@ -6,9 +6,12 @@
 .
 ├── flake.nix
 ├── hosts/
-│   └── nixos-desktop.x86_64-linux/
-│       ├── meta.nix                      # 角色与框架元数据
-│       └── default.nix                   # nixosConfigurations.nixos-desktop
+│   ├── nixos-desktop.x86_64-linux/       # 目录名带 system 后缀（推荐）
+│   │   ├── meta.nix                      # 角色与框架元数据
+│   │   └── default.nix                   # nixosConfigurations.nixos-desktop
+│   └── my.host.example.com/              # FQDN 主机名：在 meta.nix 中声明 system
+│       ├── meta.nix                      # { system = "x86_64-linux"; roles = [...]; }
+│       └── default.nix
 ├── homes/
 │   └── rhencloud/
 │       ├── default.nix                   # homeConfigurations.rhencloud
@@ -34,7 +37,7 @@
 
 | 目录 | 生成的 output |
 | ---- | ------------- |
-| `hosts/<name>.<system>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>.<system>/default.nix` 或 `hosts/<name>/default.nix`（含 `meta.nix { system }`）| `nixosConfigurations.<name>` |
 | `hosts/<name>.<system>/meta.nix` | 角色与每主机 Home Manager 策略，不直接生成 output |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
@@ -50,9 +53,14 @@
 | `shells/<name>/default.nix` | `devShells.<system>.<name>` |
 | `checks/<name>/default.nix` | `checks.<system>.<name>` |
 
-::: warning 主机目录必须带 system 后缀
+::: warning 主机目录 system 解析规则
 
-`hosts/` 下的主机目录必须带 `.<system>` 后缀，例如 `nixos-desktop.x86_64-linux`。框架不猜测默认架构。
+`hosts/` 下的主机目录按以下优先级推断 system：
+
+1. **目录后缀**（推荐）：`nixos-desktop.x86_64-linux/` — 后缀必须是 `lib.systems.flakeExposed` 中的已知 system。
+2. **`meta.nix` 声明**：无后缀目录可在 `meta.nix` 中写 `{ system = "x86_64-linux"; }`。
+
+两种形式可共存。不满足任一条件的目录会输出 `trace` 警告并跳过，不会报错中止。FQDN 形式的主机名（含多个点号）建议使用 `meta.nix` 声明 system，避免后缀解析歧义。
 
 :::
 
