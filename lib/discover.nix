@@ -10,6 +10,7 @@
   fs,
   projectRoot,
   moduleRegistries,
+  moduleGroups ? { },
 }:
 
 let
@@ -86,10 +87,12 @@ let
     nixos = depGraph.buildGraph {
       grouped = localGroupedModules;
       side = "nixos";
+      inherit moduleGroups;
     };
     home = depGraph.buildGraph {
       grouped = localGroupedModules;
       side = "home";
+      inherit moduleGroups;
     };
   };
 

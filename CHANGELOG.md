@@ -30,6 +30,12 @@
 - `expectedOutputs` 校验：`mkFlake` 支持声明期望的 hosts/homes/packages/apps，`cloud-discovery` check 会验证。
 - 文档重构：guide / concepts / reference / migration / advanced 五区分层。
 - Discovery 规范文档（`docs/reference/discovery.md`）。
+- `outputs.expected` 扩展到 checks、devShells、overlays、nixosModules、homeModules、formatter、deploy 与 images，并新增 `exact` 集合模式。
+- `outputs.eval.hosts` / `outputs.eval.homes`：可选的按 system 聚合配置求值检查，移除 drv path 字符串 context。
+- `cloud.source.clean` / `cloud.projectSource`：统一、可复现的项目源码过滤接口。
+- 模块依赖字段支持 `nixos` / `home` 分侧追加；新增 `moduleGroups`、`requiresGroups`、`provides` 与 `requiresCapabilities`。
+- `cloud-discovery` 增加 schema、规范、框架版本和 system 元数据；新增稳定 DOT 图输出。
+- `cloud.sops.secret` 支持传入 `config` 后返回可直接合并的普通 option 属性集。
 
 ### 破坏性变更
 

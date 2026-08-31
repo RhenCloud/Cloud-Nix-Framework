@@ -1,4 +1,3 @@
-# sops.nix — cloud.sops helpers
 { projectRoot }:
 
 rec {
@@ -6,17 +5,11 @@ rec {
   hostFile = host: projectRoot + "/secrets/hosts/${host}.yaml";
   defaultFile = host: if host == null then commonFile else hostFile host;
 
-  # secret { source; host?; name?; }
-  #
-  # source = "common"              → { sopsFile = .../secrets/common.yaml; }
-  # source = "host"; host = "foo"  → { sopsFile = .../secrets/hosts/foo.yaml; }
-  # source = "host"（无 host）     → 返回 NixOS module，在求值时从 config.networking.hostName 推导
-  #
-  # 加 name 时直接返回 { sops.secrets.<name> = ...; } / module（适合 imports = [...]）
   secret =
     {
       source,
       host ? null,
+      config ? null,
       name ? null,
     }:
     let
@@ -31,25 +24,44 @@ rec {
         else
           throw "cloud.sops.secret.name 必须是非空字符串";
 
-      # 纯属性集路径（host 已知）
+      hostnameFromConfig =
+        if config == null then
+          null
+        else
+          let
+            value = config.networking.hostName or null;
+          in
+          if builtins.isString value && value != "" then
+            value
+          else
+            throw "cloud.sops.secret.config.networking.hostName 必须是非空字符串";
+
       staticOptions =
         if source == "common" then
-          makeOptions commonFile
+          if config != null then
+            throw "cloud.sops.secret.config 仅可用于 source = \"host\""
+          else
+            makeOptions commonFile
         else if source == "host" && host != null then
           makeOptions (hostFile host)
+        else if source == "host" && config != null then
+          makeOptions (hostFile hostnameFromConfig)
         else
           null;
 
-      # NixOS module 路径（source = "host"，host 未提供，延迟到求值）
       dynamicModule =
         { config, ... }:
         let
-          h = config.networking.hostName;
-          opts = makeOptions (hostFile h);
+          hostname = config.networking.hostName;
         in
-        wrapName opts;
+        if builtins.isString hostname && hostname != "" then
+          wrapName (makeOptions (hostFile hostname))
+        else
+          throw "cloud.sops.secret 无法从 config.networking.hostName 推导主机名";
     in
-    if staticOptions != null then
+    if host != null && config != null then
+      throw "cloud.sops.secret 不能同时传入 host 和 config"
+    else if staticOptions != null then
       wrapName staticOptions
     else if source == "host" then
       dynamicModule

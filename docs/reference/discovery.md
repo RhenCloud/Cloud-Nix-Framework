@@ -218,8 +218,18 @@ homeModules.<name>    →  { imports = [ <所有属于该目录组的 HM 侧路�
   wants = [ "desktop.gaming" ];
   conflicts = [ "desktop.gnome" ];
 
-  nixos.enable = true;
-  home.enable = false;
+  nixos = {
+    enable = true;
+    requires = [ "nixos.base" ];
+  };
+  home = {
+    enable = false;
+    requires = [ "home.base" ];
+  };
+
+  requiresGroups = [ "desktop-stack" ];
+  provides = [ "desktop-session" ];
+  requiresCapabilities = [ "display-server" ];
 }
 ```
 
@@ -232,8 +242,14 @@ homeModules.<name>    →  { imports = [ <所有属于该目录组的 HM 侧路�
 | `conflicts` | `[string]` | `[]` | 互斥模块；双方同时启用时组合失败 |
 | `nixos.enable` | `bool` | `true` | 是否在 NixOS 侧参与自动注入与依赖图 |
 | `home.enable` | `bool` | `true` | 是否在 home-manager 侧参与自动注入与依赖图 |
+| `nixos/home.<关系字段>` | `[string]` | `[]` | 追加到当前侧的共享关系字段 |
+| `requiresGroups` | `[string]` | `[]` | 引用 `mkFlake.moduleGroups`，展开为 all-of 硬依赖 |
+| `provides` | `[string]` | `[]` | 当前模块提供的虚拟能力 |
+| `requiresCapabilities` | `[string]` | `[]` | 要求已启用集合至少包含一个 provider |
 
-所有引用使用点分模块名，不支持路径或通配符。引用未知模块、自依赖、硬依赖与冲突矛盾、依赖环均在发现阶段报错。
+所有关系字段采用“顶层共享 + 当前侧追加”语义。模块组在 `mkFlake.moduleGroups` 全局注册，列表形式两侧共享，属性集形式由 `common + 当前侧` 组成。组和能力均不自动启用模块。
+
+所有引用使用点分模块名，不支持路径或通配符。引用未知模块或组、自依赖、硬依赖与冲突矛盾、缺失能力和依赖环均会报错。
 
 组合时先执行角色过滤与主机 `modules` 覆盖，再校验 `requires` 闭包和 `conflicts`，最后进行稳定拓扑排序。多个节点同时可选时按模块名字典序排列，因此没有依赖元数据的仓库保持原有顺序。
 
@@ -343,7 +359,7 @@ checks/<name>/default.nix  →  checks.<system>.<name>
 
 ### 保留名称
 
-`cloud-discovery` 在 `checks` 命名空间下是**框架保留名称**，会被框架自动生成。用户 `checks/` 目录下若存在同名 `cloud-discovery/` 子目录，发现阶段将 `throw` 报错。
+`checks/` 下以 `cloud-` 开头的名称是框架保留命名空间，用于 discovery、expected、eval 和 DOT 检查；发现阶段遇到冲突会直接报错。
 
 ---
 
@@ -422,3 +438,7 @@ mkFlake 调用
 ---
 
 *本规范版本：v1。实现位置：`lib/discover.nix`、`lib/fs.nix`、`lib/host.nix`、`lib/default.nix`。*
+
+## Discovery 报告契约
+
+`checks.<system>.cloud-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `cloud-` 前缀。

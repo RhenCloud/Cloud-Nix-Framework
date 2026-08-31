@@ -83,7 +83,26 @@ sops-nix = {
 
 :::
 
-省略 `name` 时，helper 返回单个 `sops.secrets.<name>` 所需的 option 属性集（不是 module），可继续与其他选项合并：
+需要普通 option 属性集而不是 module 时，可显式传入当前 `config`：
+
+```nix
+{ cloud, config, ... }:
+{
+  sops.secrets.api-token =
+    cloud.sops.secret {
+      source = "host";
+      inherit config;
+    }
+    // {
+      owner = "root";
+      mode = "0400";
+    };
+}
+```
+
+`host` 与 `config` 不能同时传入。
+
+在 common、显式 `host` 或显式 `config` 模式下省略 `name` 时，helper 返回单个 `sops.secrets.<name>` 所需的 option 属性集（不是 module），可继续与其他选项合并：
 
 ```nix
 sops.secrets.password-hash =
@@ -100,10 +119,11 @@ sops.secrets.password-hash =
 - `cloud.sops.commonFile`：`<root>/secrets/common.yaml` 路径
 - `cloud.sops.hostFile host`：`<root>/secrets/hosts/<host>.yaml` 路径
 - `cloud.sops.defaultFile host`：`host == null` 时取 `commonFile`，否则取 `hostFile host`
-- `cloud.sops.secret { source; host?; name?; }`：
+- `cloud.sops.secret { source; host?; config?; name?; }`：
   - `source = "common"` → 返回 `{ sopsFile = ...; }` 或带 `name` 时返回 module/attrset
   - `source = "host"; host = "foo"` → 返回明确路径的属性集/module
-  - `source = "host"`（省略 `host`）→ 返回 NixOS module，求值时从 `config.networking.hostName` 推导
+  - `source = "host"; config = config` → 返回可直接合并的普通属性集
+  - `source = "host"`（省略 `host` 和 `config`）→ 返回 NixOS module，求值时从 `config.networking.hostName` 推导
 - `cloud.sops.mkModule { sopsNixModule; host?; defaultSopsFile?; }`
 
 ## 自定义默认文件

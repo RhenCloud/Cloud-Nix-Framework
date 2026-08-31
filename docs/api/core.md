@@ -36,9 +36,14 @@ inputs.cloud.lib.mkFlake {
     extra = { };         # 附加 outputs
     disabled = [ ];      # 禁用指定 output
     expected = { };      # 期望发现的 output（校验用）
+    eval = {
+      hosts = false;
+      homes = false;
+    };
   };
 
   moduleRegistries = [ ];
+  moduleGroups = { };
 }
 ```
 
@@ -57,8 +62,10 @@ inputs.cloud.lib.mkFlake {
 | `home.useGlobalPkgs` | bool/fn/attrset | `true` | 嵌入式 HM 是否复用 NixOS pkgs |
 | `outputs.extra` | attrset | `{}` | 与自动生成 outputs 深度合并 |
 | `outputs.disabled` | `[string]` | `[]` | 禁用自动发现的 output |
-| `outputs.expected` | attrset | `{}` | 期望发现的 hosts/homes/packages/apps 列表 |
+| `outputs.expected` | attrset | `{}` | 校验框架发现或生成的 output 集合，支持 `subset` / `exact` |
+| `outputs.eval` | attrset | `{ hosts = false; homes = false; }` | 启用 NixOS / Home Manager 轻量求值检查 |
 | `moduleRegistries` | `[registry]` | `[]` | 按需并入外部模块注册表 |
+| `moduleGroups` | attrset | `{}` | 注册供 `requiresGroups` 使用的显式 all-of 模块组 |
 
 ::: details 旧写法（已弃用，仍兼容）
 
@@ -80,6 +87,8 @@ inputs.cloud.lib.mkFlake {
   expectedOutputs = { };                     # → outputs.expected
 }
 ```
+
+`outputs.eval` 与 `moduleGroups` 没有旧式扁平别名。
 
 :::
 
@@ -225,10 +234,35 @@ inputs.cloud.lib.version
 - `cloud.sops.commonFile`
 - `cloud.sops.hostFile host`
 - `cloud.sops.defaultFile host`
-- `cloud.sops.secret { source = "common" | "host"; host ? null; name ? null; }`
+- `cloud.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`
 - `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`
 
-`secret` 传入 `name` 时返回 `{ sops.secrets.<name>.sopsFile = ...; }` 模块片段；省略 `name` 时返回 `{ sopsFile = ...; }`，便于直接赋给已有 secret。`sops` helper 不会自动注入模块，也不会合并 common 与 host 文件。
+`secret` 在 common、显式 `host` 或显式 `config` 模式下，传入 `name` 会返回 `{ sops.secrets.<name>.sopsFile = ...; }` 模块片段；省略 `name` 会返回 `{ sopsFile = ...; }`，便于直接赋给已有 secret。省略 `host` 和 `config` 的动态 host 模式始终返回 NixOS module。`sops` helper 不会自动注入模块，也不会合并 common 与 host 文件。
+
+传入 `config` 时从 `config.networking.hostName` 推导 host 并返回普通属性集；同时传入 `host` 和 `config` 会报错。
+
+## Source helper
+
+```nix
+cloud.source.clean {
+  root = ./.;
+  excludes = [ "secrets" "wallpapers" ];
+}
+
+cloud.projectSource
+```
+
+未绑定的 `inputs.cloud.lib.source.clean` 要求传入 `root`。由 `mkLib`、模块参数和 output 文件获得的绑定 `cloud` 默认使用项目根；`projectSource` 使用默认排除项 `.git`、`.direnv`、`.cnh` 和根级 `result`。
+
+## Output 验证与求值
+
+`outputs.expected.mode` 支持 `subset`（默认）和 `exact`。支持 hosts、homes、packages、apps、checks、devShells、overlays、nixosModules、homeModules、formatter、deploy 和 images；完整 schema 见[自定义 Outputs](/advanced/custom-outputs)。
+
+`outputs.eval.hosts` / `outputs.eval.homes` 默认关闭，启用后生成按 system 聚合的轻量求值检查。
+
+## 模块组与能力
+
+`mkFlake.moduleGroups` 注册显式 all-of 组。模块 `meta.nix` 可使用 `requiresGroups`、`provides`、`requiresCapabilities`，并可在 `nixos` / `home` 下追加分侧声明。
 
 ## 分层入口
 

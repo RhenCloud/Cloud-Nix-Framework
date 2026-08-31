@@ -150,7 +150,7 @@ nix flake check path:. --show-trace
 nix flake check path:. --all-systems --show-trace
 ```
 
-框架会生成标准的 `checks.<system>.cloud-discovery`，记录发现到的 hosts、homes、packages 与模块 output，用标准 checks 路径验证发现阶段。`cloud-discovery` 是保留 check 名称。
+框架会生成标准的 `checks.<system>.cloud-discovery`，记录发现到的 hosts、homes、packages 与模块 output。`checks/` 下的 `cloud-` 前缀由框架保留。
 
 ## 其他 outputs
 

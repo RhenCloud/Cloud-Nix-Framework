@@ -42,29 +42,38 @@ default.nix          → 始终注入（共享 option）
 
 ## 发现调试
 
-`checks.<system>.cloud-discovery` 是框架自动生成的 JSON 报告，列出所有发现结果：
+`checks.<system>.cloud-discovery` 是带版本元数据的稳定 JSON 报告：
 
 ```bash
 nix build .#checks.x86_64-linux.cloud-discovery
 cat result
 ```
 
-输出示例：
-
 ```json
 {
-  "hosts": ["nixos-desktop", "nixos-server"],
-  "homes": ["rhencloud@nixos-desktop"],
-  "packages": { "x86_64-linux": ["hello"] },
-  "nixosModules": ["desktop.example"],
-  "homeModules": ["desktop.example"],
+  "schemaVersion": 1,
+  "discoverySpecVersion": "1.1",
+  "frameworkVersion": "0.5.0-dev",
+  "system": "x86_64-linux",
+  "hosts": ["nixos-desktop"],
+  "packages": ["hello"],
   "moduleGraph": {
-    "nixos": { "nodes": [...], "edges": [...], "order": [...] },
-    "home": { "nodes": [...], "edges": [...], "order": [...] }
+    "nixos": {
+      "nodes": ["desktop.example"],
+      "edges": [],
+      "order": ["desktop.example"],
+      "groups": {},
+      "capabilities": {},
+      "details": {}
+    }
   },
-  "perHost": { "nixos-desktop": { "nixos": {...}, "home": {...} } }
+  "perHost": {}
 }
 ```
+
+`schemaVersion` 只在 JSON 结构发生破坏性变化时递增；`discoverySpecVersion` 独立表示目录发现规范。所有集合和图数据以稳定、可复现的顺序输出。
+
+DOT 图由 `checks.<system>.cloud-module-graph-dot` 输出，包含全局图和 `hosts/<host>/<side>.dot`。
 
 ## 命名冲突
 
@@ -72,4 +81,4 @@ cat result
 
 ## 保留名称
 
-`checks.<system>.cloud-discovery` 是框架保留名称。用户 `checks/` 目录下不能有 `cloud-discovery/` 子目录，否则发现阶段报错。
+`checks/` 下所有以 `cloud-` 开头的名称均由框架保留，包括 discovery、expected、eval 和 DOT 检查。

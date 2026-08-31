@@ -274,6 +274,5 @@ error: 主机 'nixos-desktop' 的模块依赖不完整（nixos 侧）
 
 后续候选：
 
-- `provides` 虚拟能力；
 - 为 `moduleRegistries` 增加命名节点并纳入图；
-- CLI / DOT 图可视化。
+- 由独立 Cloud CLI 消费 discovery JSON 和 DOT，提供交互式 `graph` / `why` 命令。

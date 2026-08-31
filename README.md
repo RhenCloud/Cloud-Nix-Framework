@@ -147,9 +147,14 @@ inputs.cloud.lib.mkFlake {
     extra = { };
     disabled = [ ];
     expected = { };
+    eval = {
+      hosts = false;
+      homes = false;
+    };
   };
 
   moduleRegistries = [ ];
+  moduleGroups = { };
 }
 ```
 
@@ -162,8 +167,10 @@ inputs.cloud.lib.mkFlake {
 - `home.useGlobalPkgs`：控制嵌入式 HM 是否复用 NixOS `pkgs`，同样支持按主机配置。
 - `outputs.extra`：与自动生成 outputs 深度合并。
 - `outputs.disabled`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
-- `outputs.expected`：校验期望发现的 hosts、homes、packages 与 apps。
+- `outputs.expected`：校验框架生成的 output 集合，支持 `subset` / `exact` 及 hosts、homes、packages、apps、checks、devShells、overlays、modules、formatter、deploy、images。
+- `outputs.eval`：按需生成 NixOS / Home Manager 聚合求值检查，默认关闭。
 - `moduleRegistries`：按需并入外部模块注册表。
+- `moduleGroups`：注册 all-of 模块组，供模块 metadata 的 `requiresGroups` 使用。
 
 ```nix
 home.embed = {
@@ -237,6 +244,7 @@ outputs = inputs:
 - `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数；`groupModules` 还返回模块 `meta`，自动组合采用字典序兜底的稳定拓扑排序。
 - `cloud.patches.local` / `cloud.patches.fromPR` 提供 patch helper。
 - `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
+- `cloud.source.clean { root?; excludes?; }` 提供统一源码过滤；绑定命名空间还提供 `cloud.projectSource`。
 
 ### 注入的模块参数
 
@@ -508,7 +516,7 @@ home.embed = {
 - `cloud.sops.commonFile`；
 - `cloud.sops.hostFile host`；
 - `cloud.sops.defaultFile host`；
-- `cloud.sops.secret { source = "common" | "host"; host ? null; name ? null; }`；
+- `cloud.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`；
 - `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`。
 
 传入 `name` 时，helper 直接返回可导入的模块片段：
@@ -551,7 +559,9 @@ home-manager switch --flake .#rhencloud@nixos-desktop
 nix flake check path:. --show-trace
 ```
 
-框架会生成 `checks.<system>.cloud-discovery` 验证自动发现结果。`deploy`、`homeModules`、`images`、`options` 等自定义 output 在部分 Nix 版本中可能产生 `unknown flake output` 警告；这是预期提示，不等同于 check 失败。
+框架生成 `checks.<system>.cloud-discovery` JSON 报告和 `cloud-module-graph-dot` 图输出；可通过 `outputs.eval` 启用 `cloud-eval-hosts` / `cloud-eval-homes`。所有 `cloud-*` check 名称由框架保留。
+
+`deploy`、`homeModules`、`images`、`options` 等自定义 output 在部分 Nix 版本中可能产生 `unknown flake output` 警告；这是原生 Nix 提示，不等同于 check 失败。
 
 ## 与其他框架对比
 

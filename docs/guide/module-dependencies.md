@@ -1,11 +1,10 @@
 # 模块依赖系统
 
-从 0.5.0 起，模块目录可通过纯数据 `meta.nix` 声明模块之间的硬依赖、排序、弱依赖和冲突。框架在发现阶段建立 NixOS 与 home-manager 两张独立的依赖图，在组合阶段按主机解析最终模块集合。
+从 0.5.0 起，模块目录可通过纯数据 `meta.nix` 声明依赖、顺序、模块组和虚拟能力。框架为 NixOS 与 home-manager 分别建立依赖图，并按主机解析最终模块集合。
 
-## 基础用法
+## 基础字段
 
 ```nix
-# modules/desktop/hyprland/meta.nix
 {
   requires = [ "desktop.base" ];
   after = [ "desktop.fonts" ];
@@ -15,129 +14,104 @@
 }
 ```
 
-模块名由目录路径推导：
+- `requires`：同侧硬依赖，同时保证依赖目标先加载。
+- `after` / `before`：双方启用时生效的软顺序约束。
+- `wants`：目标启用时排在目标之后，未启用不报错。
+- `conflicts`：双方同时启用时组合失败。
 
-```text
-modules/desktop/hyprland/ → desktop.hyprland
-modules/_common/base/     → _common.base
-```
+模块名由目录路径推导，例如 `modules/desktop/hyprland/` 对应 `desktop.hyprland`。引用不支持路径或通配符。
 
-引用必须使用完整点分模块名，不支持文件路径和通配符。
+## 分侧依赖
 
-## 字段语义
-
-### `requires`
-
-硬依赖。当前模块启用时，目标模块必须在同一侧启用：
+所有关系字段均可在 `nixos` 和 `home` 下追加：
 
 ```nix
 {
-  requires = [ "desktop.base" ];
-}
-```
+  requires = [ "common.base" ];
 
-`requires` 同时保证目标模块排在当前模块之前。若目标被角色过滤或被主机覆盖禁用，组合立即失败并显示依赖方、缺失目标和禁用原因。
+  nixos = {
+    enable = true;
+    requires = [ "nixos.base" ];
+    after = [ "nixos.services" ];
+  };
 
-### `after` 与 `before`
-
-软顺序约束。仅当两个模块都启用时生效，对方未启用不会报错：
-
-```nix
-{
-  after = [ "desktop.fonts" ];
-  before = [ "desktop.portal" ];
-}
-```
-
-### `wants`
-
-弱依赖。目标启用时，当前模块排在目标之后；目标未启用时忽略：
-
-```nix
-{
-  wants = [ "desktop.gaming" ];
-}
-```
-
-它与 `after` 的排序效果相同，但表达的是「可选能力」而不是单纯顺序。
-
-### `conflicts`
-
-互斥关系。两个模块在同一主机、同一侧同时启用时组合失败：
-
-```nix
-{
-  conflicts = [ "desktop.gnome" ];
-}
-```
-
-冲突按无向关系处理，只需由任意一侧声明。
-
-## 分侧控制
-
-同一模块目录可能同时包含 NixOS 与 home-manager 文件，可用分侧开关排除其中一侧：
-
-```nix
-{
-  nixos.enable = true;
-  home.enable = false;
-}
-```
-
-依赖关系始终在同侧解析。NixOS 模块不能通过 `requires` 依赖仅存在于 home-manager 侧的模块，反之亦然。
-
-## 与角色和主机覆盖的关系
-
-组合顺序如下：
-
-1. 根据主机 `roles` 过滤自动发现模块；
-2. 应用 `hosts/<host>/meta.nix` 中的 `modules` 覆盖；
-3. 校验 `requires` 闭包与 `conflicts`；
-4. 执行稳定拓扑排序；
-5. 追加外部注册表模块、主机或用户模块以及显式传入的额外模块。
-
-显式设置为 `true` 会启用被角色过滤的本地模块：
-
-```nix
-# hosts/workstation/meta.nix
-{
-  system = "x86_64-linux";
-  roles = [ "desktop" ];
-
-  modules = {
-    "development.rust" = true;
-    "desktop.gaming" = false;
+  home = {
+    enable = true;
+    requires = [ "home.base" ];
+    conflicts = [ "home.minimal" ];
   };
 }
 ```
 
-若 `desktop.hyprland` 硬依赖 `desktop.base`，则不能只禁用 `desktop.base` 而保留依赖方。框架会在 NixOS 或 home-manager 配置进入深层求值前报告错误。
+有效值为“顶层共享字段 + 当前侧字段”。NixOS-only 引用不会污染 home-manager 图。
 
-## 确定性与循环检测
+## 模块组
 
-框架使用稳定拓扑排序。没有依赖边时，结果与原来的模块名字典序一致；多个节点同时可选时，也始终选择名字典序最小的节点。
+组在 `mkFlake` 顶层集中注册：
 
-以下错误在发现阶段直接报告：
+```nix
+moduleGroups = {
+  desktop-stack = [
+    "desktop.audio"
+    "desktop.portal"
+  ];
 
-- 引用未知模块；
-- 模块引用自身；
-- 依赖环；
-- 同一模块同时 `requires` 和 `conflicts` 另一个模块；
-- 字段类型错误。
+  workstation = {
+    common = [ "desktop.fonts" ];
+    nixos = [ "desktop.display" ];
+    home = [ "desktop.theme" ];
+  };
+};
+```
 
-## 查看依赖图
+模块通过 `requiresGroups` 使用组：
 
-`checks.<system>.cloud-discovery` 报告包含全局图与各主机解析结果：
+```nix
+{
+  requiresGroups = [ "desktop-stack" ];
+}
+```
+
+组是 all-of 硬依赖。列表形式两侧共享；属性集形式使用 `common + 当前侧`。组不会自动启用成员，成员仍需被角色或主机 override 选中。
+
+## 虚拟能力
+
+```nix
+# provider
+{
+  provides = [ "display-server" ];
+}
+
+# consumer
+{
+  requiresCapabilities = [ "display-server" ];
+}
+```
+
+能力是 any-of：当前已启用集合中至少存在一个 provider 即满足。框架不会自动选择或启用 provider；多个 provider 同时启用时都排在 consumer 前。三个字段也支持顶层共享与 `nixos`/`home` 分侧追加。
+
+## 与角色和主机覆盖的关系
+
+组合顺序：
+
+1. 根据主机 `roles` 过滤模块；
+2. 应用主机 `modules` override；
+3. 展开模块组，校验硬依赖、能力和冲突；
+4. 对最终子图执行稳定拓扑排序；
+5. 追加注册表、主机、用户和显式额外模块。
+
+组和能力不会绕过角色过滤，也不会自动启用模块。
+
+## 图与诊断
 
 ```bash
 nix build .#checks.x86_64-linux.cloud-discovery
 jq '.moduleGraph, .perHost' result
+
+nix build .#checks.x86_64-linux.cloud-module-graph-dot
+find result -name '*.dot' -print
 ```
 
-关键字段：
+JSON 包含节点详情、组、能力 provider、边、全局顺序，以及逐主机的启用、禁用和能力满足原因。DOT derivation 输出全局 NixOS/HM 图和逐主机图，内容按字典序稳定生成。
 
-- `moduleGraph.<side>.nodes`：该侧节点；
-- `moduleGraph.<side>.edges`：依赖和顺序边；
-- `moduleGraph.<side>.order`：全局稳定拓扑序；
-- `perHost.<host>.<side>.enabled`：主机最终启用模块；
-- `perHost.<host>.<side>.disabledReasons`：未启用原因。
+未知模块或组、自引用、缺失硬依赖、缺失能力、冲突和循环都会以对应侧和目标为单位报告。

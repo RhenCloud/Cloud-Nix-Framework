@@ -126,6 +126,51 @@
         systems = [ "aarch64-linux" ];
       };
 
+      exampleFlakeValidated = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        systems = [ "x86_64-linux" ];
+        outputs = {
+          eval = {
+            hosts = true;
+            homes = true;
+          };
+          expected = {
+            mode = "exact";
+            hosts = [
+              "hm-standalone"
+              "nixos-desktop"
+            ];
+            homes = [
+              "rhencloud"
+              "rhencloud@hm-standalone"
+              "rhencloud@nixos-desktop"
+            ];
+            packages.x86_64-linux = [
+              "dotted.x86_64-linux"
+              "hello"
+              "legacy-only"
+              "overlay-consumer"
+              "system-layout"
+            ];
+            apps.x86_64-linux = [ "hello" ];
+            checks.x86_64-linux = [ "example" ];
+            devShells.x86_64-linux = [ "default" ];
+            overlays = [ "example" ];
+            nixosModules = [
+              "_common.always"
+              "desktop.example"
+              "development.demo"
+              "server.demo"
+            ];
+            homeModules = [ "desktop.example" ];
+            formatter = [ "x86_64-linux" ];
+            deploy.present = true;
+            images = { };
+          };
+        };
+      };
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -157,6 +202,39 @@
             };
             side = "nixos";
           };
+          sideDependencyGraph = dependencyGraph.buildGraph {
+            grouped = dependencyFixture {
+              a = {
+                requires = [ "b" ];
+                nixos.requires = [ "c" ];
+                home.requires = [ "d" ];
+              };
+              b = { };
+              c = { };
+              d = { };
+            };
+            side = "nixos";
+          };
+          groupGraph = dependencyGraph.buildGraph {
+            grouped = dependencyFixture {
+              consumer.requiresGroups = [ "desktop-stack" ];
+              audio = { };
+              portal = { };
+            };
+            moduleGroups.desktop-stack = [
+              "audio"
+              "portal"
+            ];
+            side = "nixos";
+          };
+          capabilityGraph = dependencyGraph.buildGraph {
+            grouped = dependencyFixture {
+              consumer.requiresCapabilities = [ "display-server" ];
+              wayland.provides = [ "display-server" ];
+              xorg.provides = [ "display-server" ];
+            };
+            side = "nixos";
+          };
         in
         {
           stableOrder =
@@ -179,8 +257,78 @@
               "b"
             ];
           sideFiltering = sideFilteredGraph.order == [ "b" ];
+          sideDependencies =
+            sideDependencyGraph.nodes.a.requires == [
+              "b"
+              "c"
+            ];
+          groupExpansion =
+            groupGraph.nodes.consumer.requires == [
+              "audio"
+              "portal"
+            ];
+          capabilityResolution =
+            (dependencyGraph.resolve {
+              graph = capabilityGraph;
+              enabled = [
+                "consumer"
+                "wayland"
+                "xorg"
+              ];
+              target = "测试夹具";
+            }).order == [
+              "wayland"
+              "xorg"
+              "consumer"
+            ];
         };
       dependencyFailureChecks = {
+        invalidModuleGroups = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture { };
+              moduleGroups = [ ];
+              side = "nixos";
+            }).order
+            true
+        );
+        emptyGroup = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture { };
+              moduleGroups.empty = [ ];
+              side = "nixos";
+            }).order
+            true
+        );
+        unknownGroup = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requiresGroups = [ "missing" ];
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        missingCapability =
+          let
+            graph = dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requiresCapabilities = [ "missing" ];
+              };
+              side = "nixos";
+            };
+          in
+          builtins.tryEval (
+            builtins.deepSeq
+              (dependencyGraph.resolve {
+                inherit graph;
+                enabled = [ "a" ];
+                target = "测试夹具";
+              }).order
+              true
+          );
         cycle = builtins.tryEval (
           builtins.deepSeq
             (dependencyGraph.buildGraph {
@@ -295,6 +443,12 @@
           exampleSystemLayoutPkg = exampleFlake.packages.x86_64-linux.system-layout;
           exampleDiscoveredCheck = exampleFlake.checks.${sys}.example;
           exampleDiscoveryReport = exampleFlake.checks.${sys}.cloud-discovery;
+          exampleDotGraph = exampleFlake.checks.${sys}.cloud-module-graph-dot;
+          validatedChecks = exampleFlakeValidated.checks.x86_64-linux;
+          cleanedSource = exampleBound.source.clean {
+            root = ./.;
+            excludes = [ "docs" ];
+          };
           exampleDevshell = exampleFlake.devShells.${sys}.default;
           exampleOverlay = exampleFlake.overlays.example;
           exampleLib = exampleFlake.lib.example.shout;
@@ -323,6 +477,10 @@
             source = "host";
             host = "nixos-desktop";
             name = "mihomo-proxies";
+          };
+          exampleSopsConfig = exampleBound.sops.secret {
+            source = "host";
+            config.networking.hostName = "nixos-desktop";
           };
           exampleBasicReal = (import ./examples/basic/flake.nix).outputs {
             self = {
@@ -538,12 +696,25 @@
             esac
             printf '%s\n' "$names" > "$out"
           '';
+          newfeatures = pkgs.runCommand "cloud-new-features" { } ''
+            test -e ${validatedChecks.cloud-discovery-expected-hosts}
+            test -e ${validatedChecks.cloud-discovery-expected-packages}
+            test -e ${validatedChecks.cloud-discovery-expected-deploy}
+            test -e ${validatedChecks.cloud-eval-hosts}
+            test -e ${validatedChecks.cloud-eval-homes}
+            test -e ${exampleDotGraph}/nixos.dot
+            test -e ${exampleDotGraph}/hosts/nixos-desktop/home.dot
+            test ! -e ${cleanedSource}/docs
+            test -e ${cleanedSource}/lib/default.nix
+            printf '%s\n' ok > "$out"
+          '';
           sops = pkgs.runCommand "cloud-sops" { } ''
             test "${exampleSopsModule.sops.defaultSopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             test "${exampleSopsCommon.sopsFile}" = "${toString ./examples/basic}/secrets/common.yaml"
             test "${exampleSopsHost.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             test "${exampleSopsNamedCommon.sops.secrets.password-hash.sopsFile}" = "${toString ./examples/basic}/secrets/common.yaml"
             test "${exampleSopsNamedHost.sops.secrets.mihomo-proxies.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
+            test "${exampleSopsConfig.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             printf '%s\n' "${exampleSopsModule.sops.defaultSopsFile}" > "$out"
           '';
           examplereal = pkgs.runCommand "cloud-example-real" { } ''
