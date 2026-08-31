@@ -87,7 +87,7 @@
 - system-first package 布局：`packages/<system>/<name>/default.nix`（推荐，无歧义）。
 - `cloud.sops` helper：`commonFile`、`hostFile`、`defaultFile`、`secret`、`mkModule`。
 - `cloud-discovery` check：框架保留 check，输出 JSON 发现报告。
-- `images`：通过 `meta.nix.images.formats` 或模块 `config.cloud.images.formats` 声明镜像格式。
+- `images`：通过 `meta.nix` 中的 `images.formats` 字段声明镜像格式。
 - overlay 自动应用到所有 pkgs 实例（NixOS、HM 独立/嵌入、packages、checks 等）。
 - Overlay 扩展签名检测（`functionArgs` + 调用探测）。
 

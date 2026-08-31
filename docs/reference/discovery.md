@@ -78,7 +78,7 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 | `homeManagerUseGlobalPkgs` | `bool` | `null` | **已弃用**，请使用 `home.useGlobalPkgs` |
 | `homeManager.embed` | `bool` | `null` | **已弃用**，请使用 `home.embed` |
 | `homeManager.useGlobalPkgs` | `bool` | `null` | **已弃用**，请使用 `home.useGlobalPkgs` |
-| `images.formats` | `[string]` | `[]` | 需要生成的镜像变体（如 `["iso"]`），在发现阶段读取，优先于模块 config |
+| `images.formats` | `[string]` | `[]` | 需要生成的镜像变体（如 `["iso"]`），在发现阶段读取；实际镜像构建需访问对应主机的 config |
 
 **优先级（高 → 低）**：`meta.nix` 字段 > `mkFlake` 全局参数 > 框架硬编码默认值。
 
@@ -370,7 +370,7 @@ mkFlake 调用
 │
 ├─ [5] 构造 packages / devShells / checks / apps / formatter（惰性，per-system）
 │
-├─ [6] 构造 images（惰性；优先读 meta.images.formats，避免强制求值所有主机 config）
+├─ [6] 构造 images（按 meta.images.formats 索引；访问具体值时求值对应主机）
 │
 ├─ [7] 生成框架保留 checks.*.cloud-discovery（纯 JSON 报告，不构建主机）
 │

@@ -763,7 +763,7 @@ let
             host: cfg:
             let
               hostRec = hostMeta.resolveHost host;
-              fmts = hostRec.meta.images.formats or cfg.config.cloud.images.formats;
+              fmts = hostRec.meta.images.formats or [ ];
               avail = cfg.config.system.build.images;
             in
             lib.genAttrs fmts (

@@ -267,10 +267,10 @@ outputs = inputs:
 框架基于 nixpkgs 原生 `image.modules` / `system.build.images`，按主机声明生成 `images.<host>.<format>`，不计入 checks：
 
 ```nix
-# hosts/nixos-desktop/default.nix
-{ ... }:
+# hosts/nixos-desktop/meta.nix
 {
-  config.cloud.images.formats = [ "iso" "raw" "oci" ];
+  system = "x86_64-linux";
+  images.formats = [ "iso" "raw" "oci" ];
 }
 ```
 

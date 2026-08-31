@@ -27,7 +27,7 @@ mkFlake 调用
 │       packages / devShells / checks / apps / formatter
 │
 ├─ [6] 构造 images（惰性）
-│       优先读 meta.images.formats，不强制求值所有主机
+│       按 meta.images.formats 索引构造；访问 images.<host>.<format> 时求值该主机配置
 │
 ├─ [7] 生成 checks.*.cloud-discovery
 │       纯 JSON 报告，不构建主机
