@@ -104,8 +104,18 @@ let
       root ? null,
     }:
     let
-      self = inputs.self or (throw "Cloud Nix Framework 需要 inputs.self");
-      nixpkgs = inputs.nixpkgs or (throw "Cloud Nix Framework 需要 inputs.nixpkgs");
+      self =
+        inputs.self
+          or (throw "error: missing required flake input
+
+  Cloud Nix Framework requires inputs.self
+  make sure 'self' is included in your flake inputs");
+      nixpkgs =
+        inputs.nixpkgs
+          or (throw "error: missing required flake input
+
+  Cloud Nix Framework requires inputs.nixpkgs
+  make sure 'nixpkgs' is included in your flake inputs");
       nixosSystem = nixpkgs.lib.nixosSystem;
       hm = inputs.home-manager or null;
       projectRoot = if root == null then toString self.outPath else toString root;
@@ -545,12 +555,18 @@ let
               supportedSystems = meta.systems or null;
             in
             if !builtins.isBool enabled then
-              throw "${kind}.${name} 的 meta.enable 必须是布尔值"
+              throw "error: invalid meta value
+
+  ${kind}.${name} meta.enable must be a boolean
+  got: ${builtins.typeOf enabled}"
             else if
               supportedSystems != null
               && !(builtins.isList supportedSystems && lib.all builtins.isString supportedSystems)
             then
-              throw "${kind}.${name} 的 meta.systems 必须是字符串列表"
+              throw "error: invalid meta value
+
+  ${kind}.${name} meta.systems must be a list of strings
+  got: ${builtins.typeOf supportedSystems}"
             else
               enabled
               && (supportedSystems == null || lib.elem system supportedSystems)
@@ -565,7 +581,10 @@ let
             if duplicates == [ ] then
               definitions
             else
-              throw "${kind}.${system} 存在重复名称：${lib.concatStringsSep ", " duplicates}";
+              throw "error: duplicate names detected
+
+  ${kind}.${system} contains duplicate definitions:
+  ${lib.concatStringsSep ", " duplicates}";
 
           knownSystems = lib.unique (systems ++ lib.systems.flakeExposed);
           packageDefs = map (
@@ -672,7 +691,10 @@ let
             if discovered.deploy == null then
               false
             else if !builtins.isBool (discovered.deploy.meta.enable or true) then
-              throw "deploy 的 meta.enable 必须是布尔值"
+              throw "error: invalid meta value
+
+  deploy meta.enable must be a boolean
+  got: ${builtins.typeOf discovered.deploy.meta.enable}"
             else
               (discovered.deploy.meta.enable or true) && !disabledByName "deploy" "default";
           deploy = importFile discovered.deploy.path;
@@ -749,14 +771,21 @@ let
               if builtins.hasAttr f avail then
                 avail.${f}
               else
-                throw "主机 '${host}' 请求镜像格式 '${f}'，但当前 nixpkgs 无此变体；可用变体见 `nixos-rebuild build-image` 列表"
+                throw "error: image format not supported
+
+  host '${host}' requested image format '${f}'
+  but this format is not available in the current nixpkgs
+  hint: check available formats with 'nixos-rebuild help-images'"
             )
           ) nixosConfigurations;
 
           checks = forAllSystems systems (
             sys:
             if builtins.hasAttr "cloud-discovery" discoveredChecks.${sys} then
-              throw "checks.cloud-discovery 是框架保留名称"
+              throw "error: reserved output name
+
+  'checks.cloud-discovery' is a reserved name used by the framework
+  hint: use a different name for your check"
             else
               let
                 pkgs = pkgsFor {
@@ -805,7 +834,10 @@ let
                         else if kind == "apps" then
                           discoveredApps
                         else
-                          throw "expectedOutputs 不支持字段 '${kind}'，可用：hosts, homes, packages, apps";
+                          throw "error: invalid expectedOutputs field
+
+  expectedOutputs does not support field '${kind}'
+  supported fields: hosts, homes, packages, apps";
                     in
                     [ (lib.nameValuePair "cloud-discovery-expected-${kind}" (checkExpected kind expected actual)) ]
                   ) expectedOutputs
