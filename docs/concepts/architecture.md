@@ -58,7 +58,7 @@ lib/
 2. setCloudModule（写入 config.cloud.users）
 3. nixpkgs.pkgs 注入
 4. embedModule（home-manager NixOS 模块，仅当启用嵌入且 users != []）
-5. 自动发现的 modules/（按角色过滤，字典序）
+5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
 6. moduleRegistries 中的外部模块
 7. 主机自身的 default.nix
 8. mkFlake 的 nixos.modules / mkSystem 的 extraModules

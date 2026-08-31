@@ -40,9 +40,12 @@ let
           moduleName = pathToModuleName modulePath;
         in
         if moduleName == null then
-          true # 无法识别的路径默认启用
+          true
         else
-          overrideMap.${moduleName} or true; # 显式覆盖或默认启用
+          let
+            override = overrideMap.${moduleName} or null;
+          in
+          if override == null then true else override;
     in
     lib.filter isModuleEnabled modules;
 

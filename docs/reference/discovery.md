@@ -1,6 +1,6 @@
 # Discovery 规范
 
-本文档定义 **CNF Discovery Specification v1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
+本文档定义 **CNF Discovery Specification v1.1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
 
 ## 术语
 
@@ -91,7 +91,7 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 2. setCloudModule（写入 config.cloud.users）
 3. nixpkgs.pkgs 注入
 4. embedModule（home-manager NixOS 模块，仅当 embedForHost && users != []）
-5. 自动发现的 modules/（按角色过滤，字典序）
+5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
 6. moduleRegistries 中的外部模块
 7. 主机自身的 default.nix（去除框架元数据字段）
 8. mkFlake 的 nixos.modules / mkSystem 的 extraModules
@@ -142,7 +142,7 @@ homes/<user>/
 
 ```
 1. optionsCloudHome（框架 options 声明）
-2. 自动发现的 modules/（home 侧，按角色过滤，字典序）
+2. 自动发现的 modules/（home 侧，按角色过滤后进行稳定拓扑排序）
 3. homes/<user>/default.nix（若存在）
 4. homes/<user>/<host>.nix（若存在且当前构造的是 per-host home）
 5. mkFlake 的 home.modules / mkHome 的 extraModules
@@ -165,7 +165,8 @@ homes 目录当前不读取 `meta.nix`；保留位置供未来使用（如声明
 
 | 文件名 | 注入到 | 含义 |
 | ------ | ------ | ---- |
-| `default.nix` | NixOS 侧 + HM 侧 | 平台中性共享逻辑（options 声明等） |
+| `options.nix` | NixOS 侧 + HM 侧 | 共享 option 接口声明 |
+| `default.nix` | NixOS 侧 + HM 侧 | 平台中性共享实现 |
 | `nixos.nix` | NixOS 侧 | NixOS 专属实现 |
 | `home.nix` | HM 侧 | Home Manager 专属实现 |
 
@@ -174,7 +175,8 @@ homes 目录当前不读取 `meta.nix`；保留位置供未来使用（如声明
 ### 模块名推导
 
 ```
-modules/<path>/default.nix  →  模块名 = path（以 "/" 替换为 "."）
+modules/<path>/options.nix  →  模块名 = path（以 "/" 替换为 "."）
+modules/<path>/default.nix  →  同上
 modules/<path>/nixos.nix    →  同上
 modules/<path>/home.nix     →  同上
 ```
@@ -187,7 +189,7 @@ modules/<path>/home.nix     →  同上
 
 当主机 `meta.nix` 声明了 `roles`，框架只注入满足以下任一条件的模块路径：
 
-1. 文件名是 `default.nix`（平台中性文件始终注入）。
+1. 文件名是 `options.nix` 或 `default.nix`（共享接口与平台中性实现始终注入）。
 2. 第一级目录名以 `_` 开头（common 约定，始终注入，如 `modules/_common/`）。
 3. 第一级目录名与某个角色名完全一致。
 
@@ -206,7 +208,34 @@ homeModules.<name>    →  { imports = [ <所有属于该目录组的 HM 侧路�
 
 ### meta.nix 字段（modules）
 
-modules 目录当前不读取 `meta.nix`；过滤通过主机的角色声明完成。
+每个模块目录可用 `meta.nix` 声明依赖关系。文件必须直接返回属性集：
+
+```nix
+{
+  requires = [ "desktop.base" ];
+  after = [ "desktop.fonts" ];
+  before = [ "desktop.portal" ];
+  wants = [ "desktop.gaming" ];
+  conflicts = [ "desktop.gnome" ];
+
+  nixos.enable = true;
+  home.enable = false;
+}
+```
+
+| 字段 | 类型 | 默认值 | 语义 |
+| ---- | ---- | ------ | ---- |
+| `requires` | `[string]` | `[]` | 同侧硬依赖；依赖项未启用时组合失败，同时蕴含 `after` |
+| `after` | `[string]` | `[]` | 软顺序约束；双方启用时当前模块排在目标之后 |
+| `before` | `[string]` | `[]` | 软顺序约束；双方启用时当前模块排在目标之前 |
+| `wants` | `[string]` | `[]` | 弱依赖；目标存在且启用时排在目标之后，未启用不报错 |
+| `conflicts` | `[string]` | `[]` | 互斥模块；双方同时启用时组合失败 |
+| `nixos.enable` | `bool` | `true` | 是否在 NixOS 侧参与自动注入与依赖图 |
+| `home.enable` | `bool` | `true` | 是否在 home-manager 侧参与自动注入与依赖图 |
+
+所有引用使用点分模块名，不支持路径或通配符。引用未知模块、自依赖、硬依赖与冲突矛盾、依赖环均在发现阶段报错。
+
+组合时先执行角色过滤与主机 `modules` 覆盖，再校验 `requires` 闭包和 `conflicts`，最后进行稳定拓扑排序。多个节点同时可选时按模块名字典序排列，因此没有依赖元数据的仓库保持原有顺序。
 
 ---
 ## packages/ — 包

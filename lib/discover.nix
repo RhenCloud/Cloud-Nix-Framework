@@ -13,6 +13,8 @@
 }:
 
 let
+  depGraph = import ./internal/depgraph.nix { inherit lib; };
+
   listDirAt =
     rel:
     if builtins.pathExists (projectRoot + "/" + rel) then fs.listDir (projectRoot + "/" + rel) else [ ];
@@ -77,11 +79,23 @@ let
       {
         nixos = { };
         home = { };
+        meta = { };
       };
 
+  moduleGraph = {
+    nixos = depGraph.buildGraph {
+      grouped = localGroupedModules;
+      side = "nixos";
+    };
+    home = depGraph.buildGraph {
+      grouped = localGroupedModules;
+      side = "home";
+    };
+  };
+
   localAutoModules = {
-    nixos = lib.concatLists (lib.attrValues localGroupedModules.nixos);
-    home = lib.concatLists (lib.attrValues localGroupedModules.home);
+    nixos = lib.concatMap (name: localGroupedModules.nixos.${name}) moduleGraph.nixos.order;
+    home = lib.concatMap (name: localGroupedModules.home.${name}) moduleGraph.home.order;
   };
 
   registryModules =
@@ -136,6 +150,7 @@ in
   inherit
     localGroupedModules
     localAutoModules
+    moduleGraph
     registryModules
     readMetadata
     nixFiles

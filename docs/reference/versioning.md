@@ -6,14 +6,14 @@ Cloud Nix Framework 采用 [Semantic Versioning 2.0.0](https://semver.org/lang/z
 
 ```nix
 inputs.cloud.lib.version
-# → { major = 0; minor = 3; patch = 0; pre = "dev"; string = "0.3.0-dev"; }
+# → { major = 0; minor = 5; patch = 0; pre = "dev"; string = "0.5.0-dev"; }
 ```
 
 `string` 字段适合日志输出，结构字段适合程序判断：
 
 ```nix
 assert inputs.cloud.lib.version.major == 0;
-assert inputs.cloud.lib.version.minor >= 3;
+assert inputs.cloud.lib.version.minor >= 5;
 ```
 
 ## 0.x 阶段承诺

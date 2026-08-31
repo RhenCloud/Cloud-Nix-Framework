@@ -18,6 +18,7 @@
     let
       inherit (nixpkgs) lib;
       cloud = import ./lib { inherit lib; };
+      dependencyGraph = import ./lib/internal/depgraph.nix { inherit lib; };
       frameworkInputs = {
         inherit self nixpkgs home-manager;
       };
@@ -130,6 +131,154 @@
         "aarch64-linux"
       ];
 
+      dependencyFixture = metadata: {
+        nixos = lib.mapAttrs (_: _: [ ]) metadata;
+        home = { };
+        meta = lib.mapAttrs (name: value: {
+          path = "modules/${name}/meta.nix";
+          inherit value;
+        }) metadata;
+      };
+      dependencySuccessChecks =
+        let
+          orderedGraph = dependencyGraph.buildGraph {
+            grouped = dependencyFixture {
+              a = { };
+              b.after = [ "a" ];
+              c.before = [ "b" ];
+              d.wants = [ "a" ];
+            };
+            side = "nixos";
+          };
+          sideFilteredGraph = dependencyGraph.buildGraph {
+            grouped = dependencyFixture {
+              a.nixos.enable = false;
+              b = { };
+            };
+            side = "nixos";
+          };
+        in
+        {
+          stableOrder =
+            orderedGraph.order == [
+              "a"
+              "c"
+              "b"
+              "d"
+            ];
+          optionalTargetMayBeAbsent =
+            (dependencyGraph.resolve {
+              graph = orderedGraph;
+              enabled = [
+                "b"
+                "c"
+              ];
+              target = "测试夹具";
+            }).order == [
+              "c"
+              "b"
+            ];
+          sideFiltering = sideFilteredGraph.order == [ "b" ];
+        };
+      dependencyFailureChecks = {
+        cycle = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requires = [ "b" ];
+                b.requires = [ "a" ];
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        unknown = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requires = [ "missing" ];
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        selfReference = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.after = [ "a" ];
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        contradiction = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a = {
+                  requires = [ "b" ];
+                  conflicts = [ "b" ];
+                };
+                b = { };
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        invalidFieldType = builtins.tryEval (
+          builtins.deepSeq
+            (dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requires = "b";
+              };
+              side = "nixos";
+            }).order
+            true
+        );
+        missing =
+          let
+            graph = dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.requires = [ "b" ];
+                b = { };
+              };
+              side = "nixos";
+            };
+          in
+          builtins.tryEval (
+            builtins.deepSeq
+              (dependencyGraph.resolve {
+                inherit graph;
+                enabled = [ "a" ];
+                target = "测试夹具";
+              }).order
+              true
+          );
+        conflict =
+          let
+            graph = dependencyGraph.buildGraph {
+              grouped = dependencyFixture {
+                a.conflicts = [ "b" ];
+                b = { };
+              };
+              side = "nixos";
+            };
+          in
+          builtins.tryEval (
+            builtins.deepSeq
+              (dependencyGraph.resolve {
+                inherit graph;
+                enabled = [
+                  "a"
+                  "b"
+                ];
+                target = "测试夹具";
+              }).order
+              true
+          );
+      };
+
       checksFor =
         sys:
         let
@@ -145,6 +294,7 @@
           exampleDottedPkg = exampleFlake.packages.${sys}."dotted.x86_64-linux";
           exampleSystemLayoutPkg = exampleFlake.packages.x86_64-linux.system-layout;
           exampleDiscoveredCheck = exampleFlake.checks.${sys}.example;
+          exampleDiscoveryReport = exampleFlake.checks.${sys}.cloud-discovery;
           exampleDevshell = exampleFlake.devShells.${sys}.default;
           exampleOverlay = exampleFlake.overlays.example;
           exampleLib = exampleFlake.lib.example.shout;
@@ -321,7 +471,39 @@
           images = pkgs.runCommand "cloud-images" { } ''
             printf '%s\n' "${toString (builtins.attrNames exampleFlake.images)}" > "$out"
           '';
+          modulegraph = pkgs.runCommand "cloud-module-graph" { nativeBuildInputs = [ pkgs.jq ]; } ''
+            report=${exampleDiscoveryReport}
+            ${pkgs.jq}/bin/jq -e '
+              (.moduleGraph.nixos.order | index("development.demo"))
+              < (.moduleGraph.nixos.order | index("desktop.example"))
+            ' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '
+              .moduleGraph.nixos.edges
+              | any(.from == "development.demo" and .to == "_common.always" and .kind == "requires")
+            ' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '
+              .perHost."nixos-desktop".nixos.enabled
+              | index("development.demo") != null
+            ' "$report" >/dev/null
+            if [ "${
+              if lib.all (result: result) (builtins.attrValues dependencySuccessChecks) then "yes" else "no"
+            }" != "yes" ]; then
+              echo "模块依赖正例未按预期解析" >&2
+              exit 1
+            fi
+            if [ "${
+              if lib.all (result: !result.success) (builtins.attrValues dependencyFailureChecks) then
+                "yes"
+              else
+                "no"
+            }" != "yes" ]; then
+              echo "模块依赖负例未按预期失败" >&2
+              exit 1
+            fi
+            cp "$report" "$out"
+          '';
           rolefilter = pkgs.runCommand "cloud-rolefilter" { } ''
+
             if [ -n "${exampleHost.config.environment.variables.CLOUD_SERVER or ""}" ]; then
               echo "server 角色模块应被过滤掉，但未" >&2
               exit 1

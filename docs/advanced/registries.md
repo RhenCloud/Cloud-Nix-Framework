@@ -1,6 +1,6 @@
 # 外部模块注册表（moduleRegistries）
 
-`moduleRegistries` 允许将外部 flake 的模块注入到自动发现的模块列表中，与本地 `modules/` 下的模块一同按角色过滤和字典序排列。
+`moduleRegistries` 允许将外部 flake 的模块注入组合列表。当前注册表模块没有本地模块名，不参与角色过滤与依赖图，固定追加在本地模块之后。
 
 ## 用法
 

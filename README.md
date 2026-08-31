@@ -233,8 +233,8 @@ outputs = inputs:
 ### `mkLib` / 版本 / 自动发现函数 / patch 与 sops helper
 
 - `mkLib { inherit inputs; }` 返回已绑定当前 flake 的 `cloud` 命名空间。
-- `version` 返回 `{ major; minor; patch; pre; string; }`，当前为 `0.3.0-dev`；完整策略见[版本策略](./docs/reference/versioning.md)。
-- `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数，按完整相对路径字典序稳定遍历。
+- `version` 返回 `{ major; minor; patch; pre; string; }`，当前为 `0.5.0-dev`；完整策略见[版本策略](./docs/reference/versioning.md)。
+- `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数；`groupModules` 还返回模块 `meta`，自动组合采用字典序兜底的稳定拓扑排序。
 - `cloud.patches.local` / `cloud.patches.fromPR` 提供 patch helper。
 - `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
 
@@ -594,4 +594,6 @@ MIT
 模块名称对应目录结构（用点号分隔）。设置为 `false` 禁用模块，`true` 显式启用（无需通常设置）。
 
 详见 [细粒度模块控制指南](./docs/guide/module-overrides.md)。
+
+模块目录还可通过 `meta.nix` 声明 `requires`、`after`、`before`、`wants` 与 `conflicts`；详见 [模块依赖系统](./docs/guide/module-dependencies.md)。
 

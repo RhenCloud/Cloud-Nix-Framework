@@ -13,6 +13,7 @@ let
   fs = import ./fs.nix { inherit lib; };
   patches = import ./patches.nix;
   moduleTools = import ./internal/modules.nix { inherit lib; };
+  depGraph = import ./internal/depgraph.nix { inherit lib; };
 
   defaultSystems = [
     "x86_64-linux"
@@ -23,10 +24,10 @@ let
 
   version = {
     major = 0;
-    minor = 4;
+    minor = 5;
     patch = 0;
     pre = "dev";
-    string = "0.4.0-dev";
+    string = "0.5.0-dev";
   };
 
   renderOptions =
@@ -219,13 +220,18 @@ let
       usersForHost = host: map (h: h.user) (lib.filter (h: lib.elem host h.hosts) discovered.homes);
 
       relUnderModules = p: lib.last (lib.splitString "/modules/" p);
-      isDefaultFile = p: baseNameOf p == "default.nix";
+      isSharedFile =
+        p:
+        builtins.elem (baseNameOf p) [
+          "options.nix"
+          "default.nix"
+        ];
       isCommon = p: lib.hasPrefix "_" (lib.head (lib.splitString "/" (relUnderModules p)));
       roleOfPath = p: lib.head (lib.splitString "/" (relUnderModules p));
       filterRoles =
         roles: paths:
         lib.filter (
-          p: isDefaultFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
+          p: isSharedFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
         ) paths;
 
       applyModuleOverridesToPath =
@@ -238,11 +244,63 @@ let
             modules = paths;
           };
 
+      selectLocalModules =
+        {
+          side,
+          roles,
+          overrideMap,
+          target,
+        }:
+        let
+          graph = discovered.moduleGraph.${side};
+          rolePaths = filterRoles roles discovered.localAutoModules.${side};
+          explicitlyEnabled = lib.filter (
+            name: (overrideMap.${name} or null) == true && builtins.hasAttr name graph.nodes
+          ) (builtins.attrNames overrideMap);
+          candidatePaths = lib.unique (
+            rolePaths ++ lib.concatMap (name: graph.nodes.${name}.paths) explicitlyEnabled
+          );
+          selectedPaths = applyModuleOverridesToPath {
+            inherit overrideMap;
+            paths = candidatePaths;
+          };
+          enabled = lib.unique (
+            lib.filter (name: name != null) (map moduleTools.pathToModuleName selectedPaths)
+          );
+          disabled = lib.filter (name: !builtins.elem name enabled) (builtins.attrNames graph.nodes);
+          disabledReasons = lib.listToAttrs (
+            map (
+              name:
+              let
+                override = overrideMap.${name} or null;
+                reason = if override == false then "被主机模块覆盖显式禁用" else "未被角色过滤选中";
+              in
+              lib.nameValuePair name reason
+            ) disabled
+          );
+          resolved = depGraph.resolve {
+            inherit
+              graph
+              enabled
+              target
+              disabledReasons
+              ;
+          };
+          paths = lib.concatMap (
+            name: lib.filter (path: moduleTools.pathToModuleName path == name) selectedPaths
+          ) resolved.order;
+        in
+        {
+          inherit (resolved) order;
+          inherit paths disabled disabledReasons;
+        };
+
       homeModulesFor =
         {
           user,
           host ? null,
           roles ? null,
+          overrideMap ? { },
         }:
         let
           ownDefault = lib.filter builtins.pathExists [ (projectRoot + "/homes/" + user + "/default.nix") ];
@@ -251,11 +309,34 @@ let
               [ ]
             else
               lib.filter builtins.pathExists [ (projectRoot + "/homes/" + user + "/" + host + ".nix") ];
+          selected = selectLocalModules {
+            side = "home";
+            inherit roles overrideMap;
+            target = if host == null then "home '${user}'" else "home '${user}@${host}'";
+          };
         in
-        filterRoles roles discovered.localAutoModules.home
-        ++ discovered.registryModules.home
-        ++ ownDefault
-        ++ ownHost;
+        selected.paths ++ discovered.registryModules.home ++ ownDefault ++ ownHost;
+
+      moduleReportForHost =
+        hostRecord:
+        let
+          metadata = hostMeta.normalizeHostMetadata hostRecord.meta;
+          overrideMap = moduleTools.validateModuleOverrides metadata.modules;
+          reportSide =
+            side:
+            let
+              selected = selectLocalModules {
+                inherit side overrideMap;
+                inherit (metadata) roles;
+                target = "主机 '${hostRecord.name}'";
+              };
+            in
+            {
+              enabled = selected.order;
+              inherit (selected) disabled disabledReasons;
+            };
+        in
+        lib.genAttrs [ "nixos" "home" ] reportSide;
 
       mkSystem =
         {
@@ -312,17 +393,13 @@ let
           validatedModuleOverrides = moduleTools.validateModuleOverrides moduleOverrides;
 
           hostMod = import hostModule;
-          hostModules =
-            let
-              baseModules =
-                filterRoles roles discovered.localAutoModules.nixos
-                ++ discovered.registryModules.nixos
-                ++ [ hostMod ];
-            in
-            applyModuleOverridesToPath {
-              overrideMap = validatedModuleOverrides;
-              paths = baseModules;
-            };
+          selectedNixosModules = selectLocalModules {
+            side = "nixos";
+            inherit roles;
+            overrideMap = validatedModuleOverrides;
+            target = "主机 '${host}'";
+          };
+          hostModules = selectedNixosModules.paths ++ discovered.registryModules.nixos ++ [ hostMod ];
 
           embedModule =
             { config, lib, ... }:
@@ -349,6 +426,7 @@ let
                       homeModulesFor {
                         user = u;
                         inherit host roles;
+                        overrideMap = validatedModuleOverrides;
                       }
                       ++ extraModules
                       ++ extraHomeModules;
@@ -420,18 +498,10 @@ let
           modules = [
             optionsCloudHome
           ]
-          ++ (
-            let
-              baseHomeModules = homeModulesFor { inherit user host roles; };
-            in
-            if validatedModuleOverridesHome == { } then
-              baseHomeModules
-            else
-              applyModuleOverridesToPath {
-                overrideMap = validatedModuleOverridesHome;
-                paths = baseHomeModules;
-              }
-          )
+          ++ homeModulesFor {
+            inherit user host roles;
+            overrideMap = validatedModuleOverridesHome;
+          }
           ++ modules
           ++ extraModules
           ++ extraHomeModules;
@@ -805,6 +875,15 @@ let
                   apps = discoveredApps;
                   nixosModules = builtins.attrNames discovered.localGroupedModules.nixos;
                   homeModules = builtins.attrNames discovered.localGroupedModules.home;
+                  moduleGraph = lib.mapAttrs (_: graph: {
+                    inherit (graph) order edges;
+                    nodes = builtins.attrNames graph.nodes;
+                  }) discovered.moduleGraph;
+                  perHost = lib.listToAttrs (
+                    map (
+                      hostRecord: lib.nameValuePair hostRecord.name (moduleReportForHost hostRecord)
+                    ) discovered.hosts
+                  );
                 };
                 checkExpected =
                   kind: expected: actual:

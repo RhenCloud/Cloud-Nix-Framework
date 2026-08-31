@@ -56,7 +56,13 @@ cat result
   "hosts": ["nixos-desktop", "nixos-server"],
   "homes": ["rhencloud@nixos-desktop"],
   "packages": { "x86_64-linux": ["hello"] },
-  "modules": { "nixosModules": [...], "homeModules": [...] }
+  "nixosModules": ["desktop.example"],
+  "homeModules": ["desktop.example"],
+  "moduleGraph": {
+    "nixos": { "nodes": [...], "edges": [...], "order": [...] },
+    "home": { "nodes": [...], "edges": [...], "order": [...] }
+  },
+  "perHost": { "nixos-desktop": { "nixos": {...}, "home": {...} } }
 }
 ```
 

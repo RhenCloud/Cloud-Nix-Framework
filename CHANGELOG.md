@@ -4,10 +4,13 @@
 
 ---
 
-## [Unreleased] — 0.3.0-dev
+## [Unreleased] — 0.5.0-dev
 
 ### 新增
 
+- 模块依赖系统：模块目录可通过 `meta.nix` 声明 `requires`、`after`、`before`、`wants`、`conflicts` 与分侧开关。
+- Discovery 阶段建立 NixOS / home-manager 独立 module graph，支持未知引用、自引用、矛盾与循环校验。
+- Composition 阶段按主机执行硬依赖、冲突校验和稳定拓扑排序；`cloud-discovery` 报告增加 `moduleGraph` 与 `perHost`。
 - `cloud.lib.version`：框架版本号，包含 `major`、`minor`、`patch`、`pre`、`string` 字段，支持 feature detection。
 - `mkFlake` 嵌套命名空间参数（推荐）：
   - `nixpkgs.config` → 替代 `nixpkgsConfig`

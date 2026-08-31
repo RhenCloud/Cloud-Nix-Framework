@@ -33,6 +33,7 @@ export default defineConfig({
             { text: 'Home Manager', link: '/guide/home-manager' },
             { text: '角色系统', link: '/guide/roles' },
             { text: '模块写作', link: '/guide/modules' },
+            { text: '模块依赖', link: '/guide/module-dependencies' },
             { text: 'Packages 与 Apps', link: '/guide/packages' },
             { text: 'Overlays 与补丁', link: '/guide/overlays-patches' },
             { text: '扩展 outputs', link: '/guide/extensions' },

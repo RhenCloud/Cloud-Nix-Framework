@@ -201,7 +201,7 @@ inputs.cloud.lib.mkLib { inherit inputs; }
 
 ```nix
 inputs.cloud.lib.version
-# → { major = 0; minor = 3; patch = 0; pre = "dev"; string = "0.3.0-dev"; }
+# → { major = 0; minor = 5; patch = 0; pre = "dev"; string = "0.5.0-dev"; }
 ```
 
 版本号也可从模块内的 `cloud` 参数读取（`cloud.version`）。适合在用户模块中做 feature detection 或记录依赖版本。详见[版本策略](/reference/versioning)。
@@ -209,10 +209,10 @@ inputs.cloud.lib.version
 ## 自动发现函数
 
 - `importModules dir`：返回扁平的 `{ nixos = [ ... ]; home = [ ... ]; }`。
-- `groupModules dir`：按目录键返回分组模块。
+- `groupModules dir`：返回 `{ nixos; home; meta; }`；两侧按目录键分组，`meta` 保存每个模块目录的依赖元数据与来源路径。
 - `flattenTree tree`：将嵌套属性集展开为点分键。
 
-遍历结果按完整相对路径字典序排序。
+无依赖约束时遍历结果按完整相对路径字典序排序；自动组合阶段会执行稳定拓扑排序。
 
 ## Patch helper
 

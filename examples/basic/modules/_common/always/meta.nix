@@ -1,0 +1,3 @@
+{
+  before = [ "desktop.example" ];
+}
