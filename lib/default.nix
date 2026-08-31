@@ -285,7 +285,9 @@ let
           users = usersForHost host;
 
           metadata = hostMeta.hostMetadataFor { inherit host pkgs; };
-          inherit (metadata) roles modules;
+          inherit (metadata) roles;
+          # meta.nix 的模块覆盖表；不命名为 modules，避免遮蔽下方 finalModules 使用的函数参数
+          moduleOverrides = metadata.modules;
           embedForHost = hostMeta.hostPolicyFromMetadata {
             inherit metadata host;
             key = "embedHomeManager";
@@ -307,7 +309,7 @@ let
             };
           };
 
-          validatedModuleOverrides = moduleTools.validateModuleOverrides modules;
+          validatedModuleOverrides = moduleTools.validateModuleOverrides moduleOverrides;
 
           hostMod = import hostModule;
           hostModules =
