@@ -126,6 +126,58 @@
         systems = [ "aarch64-linux" ];
       };
 
+      exampleFlakeSelective = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        systems = [ "x86_64-linux" ];
+        outputs = {
+          eval = {
+            hosts = [ "hm-standalone" ];
+            homes = [ "rhencloud@hm-standalone" ];
+          };
+          diagnostics = {
+            discovery = false;
+            moduleGraph = true;
+            perHostModuleGraph = false;
+          };
+        };
+      };
+
+      exampleFlakeNoDiagnostics = cloud.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        systems = [ "x86_64-linux" ];
+        outputs.diagnostics = {
+          discovery = false;
+          moduleGraph = false;
+          perHostModuleGraph = false;
+        };
+      };
+
+      invalidOutputCheck =
+        outputs:
+        let
+          result = cloud.mkFlake {
+            inputs = exampleInputs;
+            root = ./examples/basic;
+            systems = [ "x86_64-linux" ];
+            inherit outputs;
+          };
+        in
+        builtins.tryEval (builtins.deepSeq (builtins.attrNames result.checks.x86_64-linux) true);
+
+      invalidOutputChecks = {
+        evalUnknown = invalidOutputCheck {
+          eval.hosts = [ "missing-host" ];
+        };
+        evalType = invalidOutputCheck {
+          eval.homes = "rhencloud";
+        };
+        diagnosticsType = invalidOutputCheck {
+          diagnostics.discovery = "yes";
+        };
+      };
+
       exampleFlakeValidated = cloud.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
@@ -445,6 +497,8 @@
           exampleDiscoveryReport = exampleFlake.checks.${sys}.cloud-discovery;
           exampleDotGraph = exampleFlake.checks.${sys}.cloud-module-graph-dot;
           validatedChecks = exampleFlakeValidated.checks.x86_64-linux;
+          selectiveChecks = exampleFlakeSelective.checks.x86_64-linux;
+          noDiagnosticChecks = exampleFlakeNoDiagnostics.checks.x86_64-linux;
           cleanedSource = exampleBound.source.clean {
             root = ./.;
             excludes = [ "docs" ];
@@ -552,8 +606,8 @@
             printf '%s\n' "${examplePkg.name}" > "$out"
           '';
           outputcontrol = pkgs.runCommand "cloud-output-control" { } ''
-            test -n "${exampleDottedPkg.drvPath}"
-            test -n "${exampleDiscoveredCheck.drvPath}"
+            test "${if lib.isDerivation exampleDottedPkg then "yes" else "no"}" = "yes"
+            test "${if lib.isDerivation exampleDiscoveredCheck then "yes" else "no"}" = "yes"
             if [ "${
               if builtins.hasAttr "disabled-by-meta" exampleFlake.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
@@ -561,8 +615,15 @@
               exit 1
             fi
             if [ "${if sys == "x86_64-linux" then "yes" else "no"}" = "yes" ]; then
-              test -n "${exampleSystemLayoutPkg.drvPath}"
-              test -n "${exampleFlake.packages.${sys}.legacy-only.drvPath}"
+              test "${
+                if sys == "x86_64-linux" && lib.isDerivation exampleSystemLayoutPkg then "yes" else "no"
+              }" = "yes"
+              test "${
+                if sys == "x86_64-linux" && lib.isDerivation exampleFlake.packages.${sys}.legacy-only then
+                  "yes"
+                else
+                  "no"
+              }" = "yes"
             elif [ "${
               if builtins.hasAttr "system-layout" exampleFlake.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
@@ -680,7 +741,7 @@
           extensions = pkgs.runCommand "cloud-extensions" { } ''
             test "${exampleApp.type}" = "app"
             test -n "${exampleApp.program}"
-            test -n "${exampleFormatter.drvPath}"
+            test "${if lib.isDerivation exampleFormatter then "yes" else "no"}" = "yes"
             test "${exampleDeploy.root}" = "${toString ./examples/basic}"
             printf '%s\n' "${exampleApp.program}" > "$out"
           '';
@@ -706,6 +767,20 @@
             test -e ${exampleDotGraph}/hosts/nixos-desktop/home.dot
             test ! -e ${cleanedSource}/docs
             test -e ${cleanedSource}/lib/default.nix
+            printf '%s\n' ok > "$out"
+          '';
+          evalcontrols = pkgs.runCommand "cloud-eval-controls" { nativeBuildInputs = [ pkgs.jq ]; } ''
+            ${pkgs.jq}/bin/jq -e 'map(.name) == ["hm-standalone"]' ${selectiveChecks.cloud-eval-hosts} >/dev/null
+            ${pkgs.jq}/bin/jq -e 'map(.name) == ["rhencloud@hm-standalone"]' ${selectiveChecks.cloud-eval-homes} >/dev/null
+            test -e ${selectiveChecks.cloud-module-graph-dot}/nixos.dot
+            test ! -e ${selectiveChecks.cloud-module-graph-dot}/hosts
+            test "${if builtins.hasAttr "cloud-discovery" selectiveChecks then "yes" else "no"}" = "no"
+            test "${
+              if builtins.hasAttr "cloud-module-graph-dot" noDiagnosticChecks then "yes" else "no"
+            }" = "no"
+            test "${
+              if lib.all (result: !result.success) (builtins.attrValues invalidOutputChecks) then "yes" else "no"
+            }" = "yes"
             printf '%s\n' ok > "$out"
           '';
           sops = pkgs.runCommand "cloud-sops" { } ''

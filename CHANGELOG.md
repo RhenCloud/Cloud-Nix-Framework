@@ -31,7 +31,9 @@
 - 文档重构：guide / concepts / reference / migration / advanced 五区分层。
 - Discovery 规范文档（`docs/reference/discovery.md`）。
 - `outputs.expected` 扩展到 checks、devShells、overlays、nixosModules、homeModules、formatter、deploy 与 images，并新增 `exact` 集合模式。
-- `outputs.eval.hosts` / `outputs.eval.homes`：可选的按 system 聚合配置求值检查，移除 drv path 字符串 context。
+- `outputs.eval.hosts` / `outputs.eval.homes`：可选的按 system 聚合配置求值检查，支持 bool 或目标名称列表，并移除 drv path 字符串 context。
+- `outputs.diagnostics`：可选择关闭 discovery JSON、全局 DOT 或 per-host 模块图。
+- `scripts/benchmark-eval.sh`：使用 `NIX_SHOW_STATS=1` 记录无 eval cache 的耗时、峰值内存与 evaluator 指标。
 - `cloud.source.clean` / `cloud.projectSource`：统一、可复现的项目源码过滤接口。
 - 模块依赖字段支持 `nixos` / `home` 分侧追加；新增 `moduleGroups`、`requiresGroups`、`provides` 与 `requiresCapabilities`。
 - `cloud-discovery` 增加 schema、规范、框架版本和 system 元数据；新增稳定 DOT 图输出。
@@ -55,6 +57,8 @@
 - `lib/default.nix` 拆分为 `discover.nix`、`host.nix`、`sops.nix` 等独立文件，发现逻辑与系统构造逻辑分离。
 - overlay 签名检测升级：通过 `functionArgs` 自动识别解构签名（`{ inputs, self, cloud }: final: prev: ...`）与位置参数签名（`extras: final: prev: ...`）。
 - `cloud.patches.fromPR` 标记为已弃用，推荐使用 `cloud.patches.fromCommit`（固定 commit hash，可复现）。
+- `mkFlake` 按 system 复用 package set，并缓存 discovery 索引、主机模块选择与依赖解析结果。
+- 文件树扁平化、模块分组、重复名称检测和依赖图排序改为索引或分组算法，减少属性集合并和重复线性扫描。
 
 ### 弃用（仍兼容，至少保留一个 minor 版本）
 

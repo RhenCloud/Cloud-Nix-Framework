@@ -7,16 +7,16 @@ mkFlake 调用
 │
 ├─ [1] 发现阶段（lib/discover.nix）
 │       纯文件系统扫描，不求值任何 Nix 配置
-│       ├── hosts/       → [ { name, system, path, meta } ]
-│       ├── homes/       → [ { user, hosts } ]
-│       ├── modules/     → groupedModules, autoModules
+│       ├── hosts/       → 列表 + hostsByName
+│       ├── homes/       → 列表 + homesByUser + usersByHost
+│       ├── modules/     → groupedModules + 模块名索引
 │       ├── packages/    → [ { name, path, meta, system? } ]
 │       ├── overlays/    → [ { name, path } ]
 │       ├── apps/shells/checks/formatter/deploy/lib/
 │       └── 禁用过滤（outputs.disabled、meta.enable = false）
 │
-├─ [2] 构造 overlays / pkgsFor
-│       不求值任何主机 config
+├─ [2] 构造 overlays / pkgsBySystem
+│       每个 system 只实例化并复用一个 package set
 │
 ├─ [3] 构造 nixosConfigurations（惰性）
 │       仅 nix build .#nixosConfigurations.foo 时求值
@@ -29,13 +29,13 @@ mkFlake 调用
 ├─ [6] 构造 images（惰性）
 │       按 meta.images.formats 索引构造；访问 images.<host>.<format> 时求值该主机配置
 │
-├─ [7] 生成 checks.*.cloud-discovery
-│       纯 JSON 报告，不构建主机
+├─ [7] 按 outputs.diagnostics 生成诊断 checks
+│       discovery JSON / 全局 DOT / per-host DOT
 │
 └─ [8] lib.recursiveUpdate generated outputs.extra
 ```
 
-**关键保证**：步骤 [1] 是纯文件系统扫描。步骤 [3]–[7] 均为惰性属性集，`nix flake show` 或查询单个 output 不会触发其他 output 的求值。
+**关键保证**：步骤 [1] 是纯文件系统扫描。步骤 [3]–[7] 均为惰性属性集，`nix flake show` 或查询单个 output 不会触发其他 output 的求值。发现结果按名称建立索引；模块选择、主机 metadata 和依赖解析按主机缓存；同一 `mkFlake` 调用内的 packages、apps、shells、checks、formatter、NixOS 与 Home Manager 复用对应 system 的 `pkgs`。
 
 ## 库文件结构
 

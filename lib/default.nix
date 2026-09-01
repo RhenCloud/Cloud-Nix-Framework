@@ -187,11 +187,19 @@ let
           nixpkgsConfig ? { },
           extraOverlays ? [ ],
         }:
-        import nixpkgs {
-          inherit system;
-          config = nixpkgsConfig;
-          overlays = overlayList ++ extraOverlays;
-        };
+        if
+          nixpkgsConfig == { }
+          && overlayList == [ ]
+          && extraOverlays == [ ]
+          && builtins.hasAttr system (nixpkgs.legacyPackages or { })
+        then
+          nixpkgs.legacyPackages.${system}
+        else
+          import nixpkgs {
+            inherit system;
+            config = nixpkgsConfig;
+            overlays = overlayList ++ extraOverlays;
+          };
 
       importFile =
         path:
@@ -230,32 +238,7 @@ let
         }
         // extraSpecialArgs;
 
-      usersForHost = host: map (h: h.user) (lib.filter (h: lib.elem host h.hosts) discovered.homes);
-
-      relUnderModules = p: lib.last (lib.splitString "/modules/" p);
-      isSharedFile =
-        p:
-        builtins.elem (baseNameOf p) [
-          "options.nix"
-          "default.nix"
-        ];
-      isCommon = p: lib.hasPrefix "_" (lib.head (lib.splitString "/" (relUnderModules p)));
-      roleOfPath = p: lib.head (lib.splitString "/" (relUnderModules p));
-      filterRoles =
-        roles: paths:
-        lib.filter (
-          p: isSharedFile p || isCommon p || roles == null || lib.elem (roleOfPath p) roles
-        ) paths;
-
-      applyModuleOverridesToPath =
-        { overrideMap, paths }:
-        if overrideMap == { } then
-          paths
-        else
-          moduleTools.applyModuleOverrides {
-            overrides = overrideMap;
-            modules = paths;
-          };
+      usersForHost = host: discovered.usersByHost.${host} or [ ];
 
       selectLocalModules =
         {
@@ -266,29 +249,32 @@ let
         }:
         let
           graph = discovered.moduleGraph.${side};
-          rolePaths = filterRoles roles discovered.localAutoModules.${side};
-          explicitlyEnabled = lib.filter (
-            name: (overrideMap.${name} or null) == true && builtins.hasAttr name graph.nodes
-          ) (builtins.attrNames overrideMap);
-          candidatePaths = lib.unique (
-            rolePaths ++ lib.concatMap (name: graph.nodes.${name}.paths) explicitlyEnabled
-          );
-          selectedPaths = applyModuleOverridesToPath {
-            inherit overrideMap;
-            paths = candidatePaths;
-          };
-          enabled = lib.unique (
-            lib.filter (name: name != null) (map moduleTools.pathToModuleName selectedPaths)
-          );
-          disabled = lib.filter (name: !builtins.elem name enabled) (builtins.attrNames graph.nodes);
-          disabledReasons = lib.listToAttrs (
+          moduleIndex = discovered.localGroupedModules.index;
+          sideOnly = if side == "nixos" then "nixosOnly" else "homeOnly";
+          selectedByName = lib.mapAttrs (
+            name: node:
+            let
+              record = moduleIndex.${name};
+              roleMatches = record.common || roles == null || builtins.elem record.role roles;
+              defaultPaths = record.shared ++ lib.optionals roleMatches record.${sideOnly};
+              override = overrideMap.${name} or null;
+            in
+            if override == false then
+              [ ]
+            else if override == true then
+              node.paths
+            else
+              defaultPaths
+          ) graph.nodes;
+          enabled = lib.filter (name: selectedByName.${name} != [ ]) (builtins.attrNames selectedByName);
+          enabledSet = lib.genAttrs enabled (_: true);
+          disabled = lib.filter (name: !builtins.hasAttr name enabledSet) (builtins.attrNames graph.nodes);
+          disabledReasons = builtins.listToAttrs (
             map (
               name:
-              let
-                override = overrideMap.${name} or null;
-                reason = if override == false then "被主机模块覆盖显式禁用" else "未被角色过滤选中";
-              in
-              lib.nameValuePair name reason
+              lib.nameValuePair name (
+                if (overrideMap.${name} or null) == false then "被主机模块覆盖显式禁用" else "未被角色过滤选中"
+              )
             ) disabled
           );
           resolved = depGraph.resolve {
@@ -299,9 +285,7 @@ let
               disabledReasons
               ;
           };
-          paths = lib.concatMap (
-            name: lib.filter (path: moduleTools.pathToModuleName path == name) selectedPaths
-          ) resolved.order;
+          paths = lib.concatMap (name: selectedByName.${name}) resolved.order;
         in
         {
           inherit (resolved)
@@ -312,41 +296,60 @@ let
           inherit paths disabled disabledReasons;
         };
 
+      globalHomeSelection = selectLocalModules {
+        side = "home";
+        roles = null;
+        overrideMap = { };
+        target = "全局 home";
+      };
+
+      hostPlans = lib.mapAttrs (
+        host: record:
+        let
+          metadata = hostMeta.normalizeHostMetadata record.meta;
+          overrideMap = moduleTools.validateModuleOverrides metadata.modules;
+          select =
+            side:
+            selectLocalModules {
+              inherit side overrideMap;
+              inherit (metadata) roles;
+              target = "主机 '${host}'";
+            };
+        in
+        {
+          inherit record metadata overrideMap;
+          nixos = select "nixos";
+          home = select "home";
+        }
+      ) discovered.hostsByName;
+
       homeModulesFor =
         {
           user,
           host ? null,
-          roles ? null,
-          overrideMap ? { },
+          selection ? if host == null then globalHomeSelection else hostPlans.${host}.home,
         }:
         let
-          ownDefault = lib.filter builtins.pathExists [ (projectRoot + "/homes/" + user + "/default.nix") ];
-          ownHost =
-            if host == null then
-              [ ]
-            else
-              lib.filter builtins.pathExists [ (projectRoot + "/homes/" + user + "/" + host + ".nix") ];
-          selected = selectLocalModules {
-            side = "home";
-            inherit roles overrideMap;
-            target = if host == null then "home '${user}'" else "home '${user}@${host}'";
-          };
+          homeRecord =
+            discovered.homesByUser.${user} or {
+              defaultPath = null;
+              hostModules = { };
+            };
+          ownDefault = lib.optional (homeRecord.defaultPath != null) homeRecord.defaultPath;
+          ownHost = lib.optional (
+            host != null && builtins.hasAttr host homeRecord.hostModules
+          ) homeRecord.hostModules.${host};
         in
-        selected.paths ++ discovered.registryModules.home ++ ownDefault ++ ownHost;
+        selection.paths ++ discovered.registryModules.home ++ ownDefault ++ ownHost;
 
       moduleReportForHost =
         hostRecord:
         let
-          metadata = hostMeta.normalizeHostMetadata hostRecord.meta;
-          overrideMap = moduleTools.validateModuleOverrides metadata.modules;
+          plan = builtins.getAttr hostRecord.name hostPlans;
           reportSide =
             side:
             let
-              selected = selectLocalModules {
-                inherit side overrideMap;
-                inherit (metadata) roles;
-                target = "主机 '${hostRecord.name}'";
-              };
+              selected = plan.${side};
             in
             {
               enabled = selected.order;
@@ -374,23 +377,26 @@ let
           extraOverlays ? [ ],
           embedHomeManager ? true,
           homeManagerUseGlobalPkgs ? true,
+          _pkgs ? null,
         }:
         let
-          hostRecord = hostMeta.resolveHost host;
+          plan = hostPlans.${host};
+          hostRecord = plan.record;
           sys = if system == null then hostRecord.system else system;
-          pkgs = pkgsFor {
-            system = sys;
-            inherit nixpkgsConfig extraOverlays;
-          };
+          pkgs =
+            if _pkgs == null then
+              pkgsFor {
+                system = sys;
+                inherit nixpkgsConfig extraOverlays;
+              }
+            else
+              _pkgs;
           hostModule = hostRecord.path;
           specialArgs = specialArgsFor extraSpecialArgs;
           homeSpecialArgs = specialArgsFor extraHomeSpecialArgs;
           users = usersForHost host;
 
-          metadata = hostMeta.hostMetadataFor { inherit host pkgs; };
-          inherit (metadata) roles;
-          # meta.nix 的模块覆盖表；不命名为 modules，避免遮蔽下方 finalModules 使用的函数参数
-          moduleOverrides = metadata.modules;
+          inherit (plan) metadata;
           embedForHost = hostMeta.hostPolicyFromMetadata {
             inherit metadata host;
             key = "embedHomeManager";
@@ -412,16 +418,8 @@ let
             };
           };
 
-          validatedModuleOverrides = moduleTools.validateModuleOverrides moduleOverrides;
-
           hostMod = import hostModule;
-          selectedNixosModules = selectLocalModules {
-            side = "nixos";
-            inherit roles;
-            overrideMap = validatedModuleOverrides;
-            target = "主机 '${host}'";
-          };
-          hostModules = selectedNixosModules.paths ++ discovered.registryModules.nixos ++ [ hostMod ];
+          hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ [ hostMod ];
 
           embedModule =
             { config, lib, ... }:
@@ -447,8 +445,8 @@ let
                     imports =
                       homeModulesFor {
                         user = u;
-                        inherit host roles;
-                        overrideMap = validatedModuleOverrides;
+                        inherit host;
+                        selection = plan.home;
                       }
                       ++ extraModules
                       ++ extraHomeModules;
@@ -494,6 +492,7 @@ let
           extraSpecialArgs ? { },
           nixpkgsConfig ? { },
           extraOverlays ? [ ],
+          _pkgs ? null,
         }:
         let
           hmLib =
@@ -505,14 +504,15 @@ let
               system
             else
               lib.head defaultSystems;
-          pkgs = pkgsFor {
-            system = sys;
-            inherit nixpkgsConfig extraOverlays;
-          };
-          roles = if host == null then null else hostMeta.rolesFor { inherit host pkgs; };
-          metadata = if host == null then null else hostMeta.hostMetadataFor { inherit host pkgs; };
-          validatedModuleOverridesHome =
-            if metadata == null then { } else moduleTools.validateModuleOverrides metadata.modules;
+          pkgs =
+            if _pkgs == null then
+              pkgsFor {
+                system = sys;
+                inherit nixpkgsConfig extraOverlays;
+              }
+            else
+              _pkgs;
+          selection = if host == null then globalHomeSelection else hostPlans.${host}.home;
         in
         hmLib.homeManagerConfiguration {
           inherit pkgs;
@@ -521,8 +521,7 @@ let
             optionsCloudHome
           ]
           ++ homeModulesFor {
-            inherit user host roles;
-            overrideMap = validatedModuleOverridesHome;
+            inherit user host selection;
           }
           ++ modules
           ++ extraModules
@@ -594,6 +593,14 @@ let
           expectedOutputs =
             if builtins.hasAttr "expected" outputs then outputs.expected else flatOr "expectedOutputs" { };
           evalOutputs = outputs.eval or { };
+          diagnosticsOutputs = outputs.diagnostics or { };
+          packageSystems = lib.unique (systems ++ map (host: host.system) discovered.hosts);
+          pkgsBySystem = lib.genAttrs packageSystems (
+            system:
+            pkgsFor {
+              inherit system nixpkgsConfig extraOverlays;
+            }
+          );
 
           nixosConfigurations = lib.listToAttrs (
             map (
@@ -612,6 +619,7 @@ let
                   embedHomeManager
                   homeManagerUseGlobalPkgs
                   ;
+                _pkgs = pkgsBySystem.${h.system};
               })
             ) discovered.hosts
           );
@@ -670,8 +678,8 @@ let
           uniqueDefinitions =
             kind: system: definitions:
             let
-              names = map (d: d.name) definitions;
-              duplicates = lib.unique (lib.filter (n: lib.count (c: c == n) names > 1) names);
+              grouped = lib.groupBy (definition: definition.name) definitions;
+              duplicates = builtins.attrNames (lib.filterAttrs (_: values: builtins.length values > 1) grouped);
             in
             if duplicates == [ ] then
               definitions
@@ -714,10 +722,7 @@ let
           packages = forAllSystems systems (
             sys:
             let
-              pkgs = pkgsFor {
-                system = sys;
-                inherit nixpkgsConfig extraOverlays;
-              };
+              pkgs = pkgsBySystem.${sys};
               definitions = uniqueDefinitions "packages" sys (
                 lib.filter (
                   package:
@@ -738,10 +743,7 @@ let
             forAllSystems systems (
               sys:
               let
-                pkgs = pkgsFor {
-                  system = sys;
-                  inherit nixpkgsConfig extraOverlays;
-                };
+                pkgs = pkgsBySystem.${sys};
                 enabled = lib.filter (
                   d:
                   metadataEnabled {
@@ -771,10 +773,7 @@ let
                 }
               then
                 let
-                  pkgs = pkgsFor {
-                    system = sys;
-                    inherit nixpkgsConfig extraOverlays;
-                  };
+                  pkgs = pkgsBySystem.${sys};
                 in
                 [ (lib.nameValuePair sys (callPackage pkgs discovered.formatter.path)) ]
               else
@@ -803,52 +802,40 @@ let
           homeConfigurations =
             let
               global = lib.listToAttrs (
-                map
-                  (
-                    h:
-                    lib.nameValuePair h.user (mkHome {
+                map (
+                  h:
+                  lib.nameValuePair h.user (mkHome {
+                    inherit (h) user;
+                    system = lib.head systems;
+                    extraSpecialArgs = extraHomeSpecialArgs;
+                    inherit
+                      extraModules
+                      extraHomeModules
+                      nixpkgsConfig
+                      extraOverlays
+                      ;
+                    _pkgs = pkgsBySystem.${lib.head systems};
+                  })
+                ) (lib.filter (homeRecord: homeRecord.defaultPath != null) discovered.homes)
+              );
+              perHost = lib.listToAttrs (
+                lib.concatMap (
+                  h:
+                  map (
+                    host:
+                    lib.nameValuePair "${h.user}@${host}" (mkHome {
                       inherit (h) user;
-                      system = lib.head systems;
                       extraSpecialArgs = extraHomeSpecialArgs;
                       inherit
+                        host
                         extraModules
                         extraHomeModules
                         nixpkgsConfig
                         extraOverlays
                         ;
+                      _pkgs = pkgsBySystem.${discovered.hostsByName.${host}.system};
                     })
-                  )
-                  (
-                    lib.filter (
-                      h: builtins.pathExists (projectRoot + "/homes/" + h.user + "/default.nix")
-                    ) discovered.homes
-                  )
-              );
-              perHost = lib.listToAttrs (
-                lib.concatMap (
-                  h:
-                  map
-                    (
-                      host:
-                      lib.nameValuePair "${h.user}@${host}" (mkHome {
-                        inherit (h) user;
-                        extraSpecialArgs = extraHomeSpecialArgs;
-                        inherit
-                          host
-                          extraModules
-                          extraHomeModules
-                          nixpkgsConfig
-                          extraOverlays
-                          ;
-                      })
-                    )
-                    (
-                      lib.filter (
-                        host:
-                        builtins.pathExists (projectRoot + "/homes/" + h.user + "/" + host + ".nix")
-                        && lib.any (x: x.name == host) discovered.hosts
-                      ) h.hosts
-                    )
+                  ) (lib.filter (host: builtins.hasAttr host discovered.hostsByName) h.hosts)
                 ) discovered.homes
               );
             in
@@ -877,10 +864,7 @@ let
           checks = forAllSystems systems (
             sys:
             let
-              pkgs = pkgsFor {
-                system = sys;
-                inherit nixpkgsConfig extraOverlays;
-              };
+              pkgs = pkgsBySystem.${sys};
               discoveredHosts = map (host: host.name) discovered.hosts;
               discoveredHomes = builtins.attrNames homeConfigurations;
               discoveredPkgs = builtins.attrNames packages.${sys};
@@ -1083,37 +1067,91 @@ let
               ) evalKeys;
               evalHosts = checkedEvalOutputs.hosts or false;
               evalHomes = checkedEvalOutputs.homes or false;
+              evalSelection =
+                kind: available: value:
+                if builtins.isBool value then
+                  if value then available else [ ]
+                else if builtins.isList value && lib.all builtins.isString value then
+                  let
+                    selected = lib.unique value;
+                    availableSet = lib.genAttrs available (_: true);
+                    unknown = lib.filter (name: !builtins.hasAttr name availableSet) selected;
+                  in
+                  if unknown == [ ] then
+                    selected
+                  else
+                    throw "outputs.eval.${kind} 包含未发现的目标：${lib.concatStringsSep ", " unknown}"
+                else
+                  throw "outputs.eval.${kind} 必须是布尔值或字符串列表";
+              selectedEvalHosts = evalSelection "hosts" discoveredHosts evalHosts;
+              selectedEvalHomes = evalSelection "homes" discoveredHomes evalHomes;
               checkedEval =
                 if invalidEvalKeys != [ ] then
                   throw "outputs.eval 包含不支持的字段：${lib.concatStringsSep ", " invalidEvalKeys}"
-                else if !builtins.isBool evalHosts || !builtins.isBool evalHomes then
-                  throw "outputs.eval.hosts 和 outputs.eval.homes 必须是布尔值"
                 else
-                  true;
-              hostEvalRecords = map (hostRecord: {
-                inherit (hostRecord) name;
-                drvPath =
-                  builtins.unsafeDiscardStringContext
-                    nixosConfigurations.${hostRecord.name}.config.system.build.toplevel.drvPath;
-              }) (lib.filter (hostRecord: hostRecord.system == sys) discovered.hosts);
+                  builtins.deepSeq selectedEvalHosts (builtins.deepSeq selectedEvalHomes true);
+              selectedEvalHostSet = lib.genAttrs selectedEvalHosts (_: true);
+              hostEvalRecords =
+                map
+                  (hostRecord: {
+                    inherit (hostRecord) name;
+                    drvPath =
+                      builtins.unsafeDiscardStringContext
+                        nixosConfigurations.${hostRecord.name}.config.system.build.toplevel.drvPath;
+                  })
+                  (
+                    lib.filter (
+                      hostRecord: hostRecord.system == sys && builtins.hasAttr hostRecord.name selectedEvalHostSet
+                    ) discovered.hosts
+                  );
               systemForHome =
                 name:
                 if lib.hasInfix "@" name then
-                  (hostMeta.resolveHost (lib.last (lib.splitString "@" name))).system
+                  discovered.hostsByName.${lib.last (lib.splitString "@" name)}.system
                 else
                   lib.head systems;
               homeEvalRecords = map (name: {
                 inherit name;
                 drvPath = builtins.unsafeDiscardStringContext homeConfigurations.${name}.activationPackage.drvPath;
-              }) (lib.filter (name: systemForHome name == sys) discoveredHomes);
+              }) (lib.filter (name: systemForHome name == sys) selectedEvalHomes);
               evalChecks =
                 assert checkedEval;
-                lib.optionalAttrs evalHosts {
+                lib.optionalAttrs (evalHosts == true || hostEvalRecords != [ ]) {
                   cloud-eval-hosts = pkgs.writeText "cloud-eval-hosts-${sys}.json" (builtins.toJSON hostEvalRecords);
                 }
-                // lib.optionalAttrs evalHomes {
+                // lib.optionalAttrs (evalHomes == true || homeEvalRecords != [ ]) {
                   cloud-eval-homes = pkgs.writeText "cloud-eval-homes-${sys}.json" (builtins.toJSON homeEvalRecords);
                 };
+
+              checkedDiagnosticsOutputs =
+                if builtins.isAttrs diagnosticsOutputs then
+                  diagnosticsOutputs
+                else
+                  throw "outputs.diagnostics 必须是属性集";
+              diagnosticKeys = builtins.attrNames checkedDiagnosticsOutputs;
+              supportedDiagnosticKeys = [
+                "discovery"
+                "moduleGraph"
+                "perHostModuleGraph"
+              ];
+              invalidDiagnosticKeys = lib.filter (
+                name: !builtins.elem name supportedDiagnosticKeys
+              ) diagnosticKeys;
+              diagnostics = {
+                discovery = checkedDiagnosticsOutputs.discovery or true;
+                moduleGraph = checkedDiagnosticsOutputs.moduleGraph or true;
+                perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or true;
+              };
+              invalidDiagnosticValues = lib.filter (
+                name: !builtins.isBool diagnostics.${name}
+              ) supportedDiagnosticKeys;
+              checkedDiagnostics =
+                if invalidDiagnosticKeys != [ ] then
+                  throw "outputs.diagnostics 包含不支持的字段：${lib.concatStringsSep ", " invalidDiagnosticKeys}"
+                else if invalidDiagnosticValues != [ ] then
+                  throw "outputs.diagnostics 的字段必须是布尔值：${lib.concatStringsSep ", " invalidDiagnosticValues}"
+                else
+                  true;
 
               graphReport = lib.mapAttrs (_: graph: {
                 inherit (graph)
@@ -1136,11 +1174,15 @@ let
                     ;
                 }) graph.nodes;
               }) discovered.moduleGraph;
-              perHostReport = lib.listToAttrs (
-                map (
-                  hostRecord: lib.nameValuePair hostRecord.name (moduleReportForHost hostRecord)
-                ) discovered.hosts
-              );
+              perHostReport =
+                if diagnostics.perHostModuleGraph then
+                  builtins.listToAttrs (
+                    map (
+                      hostRecord: lib.nameValuePair hostRecord.name (moduleReportForHost hostRecord)
+                    ) discovered.hosts
+                  )
+                else
+                  { };
               report = {
                 schemaVersion = 1;
                 discoverySpecVersion = "1.1";
@@ -1245,11 +1287,14 @@ let
                 hint: use a different name for your check
               ''
             else
+              assert checkedDiagnostics;
               discoveredChecks.${sys}
               // expectedChecks
               // evalChecks
-              // {
+              // lib.optionalAttrs diagnostics.discovery {
                 cloud-discovery = pkgs.writeText "cloud-discovery-${sys}.json" (builtins.toJSON report);
+              }
+              // lib.optionalAttrs diagnostics.moduleGraph {
                 cloud-module-graph-dot = dotCheck;
               }
           );

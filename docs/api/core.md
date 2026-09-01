@@ -40,6 +40,11 @@ inputs.cloud.lib.mkFlake {
       hosts = false;
       homes = false;
     };
+    diagnostics = {
+      discovery = true;
+      moduleGraph = true;
+      perHostModuleGraph = true;
+    };
   };
 
   moduleRegistries = [ ];
@@ -63,7 +68,8 @@ inputs.cloud.lib.mkFlake {
 | `outputs.extra` | attrset | `{}` | 与自动生成 outputs 深度合并 |
 | `outputs.disabled` | `[string]` | `[]` | 禁用自动发现的 output |
 | `outputs.expected` | attrset | `{}` | 校验框架发现或生成的 output 集合，支持 `subset` / `exact` |
-| `outputs.eval` | attrset | `{ hosts = false; homes = false; }` | 启用 NixOS / Home Manager 轻量求值检查 |
+| `outputs.eval` | attrset | `{ hosts = false; homes = false; }` | 按 bool 或目标名称列表启用 NixOS / Home Manager 轻量求值检查 |
+| `outputs.diagnostics` | attrset | 全部 `true` | 控制 discovery JSON、全局 DOT 和 per-host 模块图 |
 | `moduleRegistries` | `[registry]` | `[]` | 按需并入外部模块注册表 |
 | `moduleGroups` | attrset | `{}` | 注册供 `requiresGroups` 使用的显式 all-of 模块组 |
 
@@ -88,7 +94,7 @@ inputs.cloud.lib.mkFlake {
 }
 ```
 
-`outputs.eval` 与 `moduleGroups` 没有旧式扁平别名。
+`outputs.eval`、`outputs.diagnostics` 与 `moduleGroups` 没有旧式扁平别名。
 
 :::
 
@@ -258,7 +264,7 @@ cloud.projectSource
 
 `outputs.expected.mode` 支持 `subset`（默认）和 `exact`。支持 hosts、homes、packages、apps、checks、devShells、overlays、nixosModules、homeModules、formatter、deploy 和 images；完整 schema 见[自定义 Outputs](/advanced/custom-outputs)。
 
-`outputs.eval.hosts` / `outputs.eval.homes` 默认关闭，启用后生成按 system 聚合的轻量求值检查。
+`outputs.eval.hosts` / `outputs.eval.homes` 默认关闭。值为 `true` 时检查全部目标，值为字符串列表时只求值指定 host 或 home；框架按 system 生成聚合检查。`outputs.diagnostics` 默认全部开启，可关闭不需要的 discovery 或模块图，避免 CI 强制无关报告。
 
 ## 模块组与能力
 

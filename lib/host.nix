@@ -86,20 +86,12 @@ let
 
   resolveHost =
     host:
-    let
-      matches = lib.filter (h: h.name == host) discovered.hosts;
-    in
-    if matches == [ ] then
-      throw "未发现主机 '${host}'，请创建 hosts/${host}/ 目录并在 meta.nix 中声明 system"
-    else
-      lib.head matches;
+    discovered.hostsByName.${host}
+      or (throw "未发现主机 '${host}'，请创建 hosts/${host}/ 目录并在 meta.nix 中声明 system");
 
   hostMetadataFor =
-    { host, pkgs }:
-    let
-      hostRec = resolveHost host;
-    in
-    normalizeHostMetadata hostRec.meta;
+    { host, ... }:
+    normalizeHostMetadata (resolveHost host).meta;
 
   resolveHostPolicy =
     {
@@ -141,8 +133,8 @@ let
       throw "主机 '${host}' 的 ${key} 元数据必须是布尔值";
 
   rolesFor =
-    { host, pkgs }:
-    (hostMetadataFor { inherit host pkgs; }).roles;
+    { host, ... }:
+    (hostMetadataFor { inherit host; }).roles;
 
 in
 {

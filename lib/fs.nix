@@ -1,15 +1,15 @@
-{
-  lib,
-}:
+{ lib }:
 
 let
   listDir =
     dir:
-    lib.sort (a: b: a.name < b.name) (
-      lib.mapAttrsToList (name: type: {
-        inherit name type;
-      }) (builtins.readDir dir)
-    );
+    let
+      entries = builtins.readDir dir;
+    in
+    map (name: {
+      inherit name;
+      type = entries.${name};
+    }) (builtins.attrNames entries);
 
   walk =
     dir:
@@ -37,18 +37,20 @@ let
     lib.sort (a: b: a.rel < b.rel) (go "" dir);
 
   flattenTree =
+    tree:
     let
       go =
-        prefix: tree:
-        lib.foldlAttrs (
-          acc: name: value:
+        prefix: value:
+        lib.concatMap (
+          name:
           let
-            key = if prefix == "" then name else prefix + "." + name;
+            item = value.${name};
+            key = if prefix == "" then name else "${prefix}.${name}";
           in
-          if builtins.isAttrs value then acc // go key value else acc // { ${key} = value; }
-        ) { } tree;
+          if builtins.isAttrs item then go key item else [ (lib.nameValuePair key item) ]
+        ) (builtins.attrNames value);
     in
-    go "";
+    builtins.listToAttrs (go "" tree);
 
   readMetadata =
     path:
@@ -70,6 +72,7 @@ let
         nixos = { };
         home = { };
         meta = { };
+        index = { };
       }
     else
       let
@@ -79,62 +82,111 @@ let
           "nixos.nix"
           "home.nix"
         ];
-        relevant = lib.filter (f: builtins.elem f.base magic) (walk dir);
-        folderOf = f: lib.removeSuffix ("/" + f.base) f.rel;
-        nameOf = folder: lib.strings.replaceStrings [ "/" ] [ "." ] folder;
-        folders = lib.unique (map folderOf relevant);
-        names = map nameOf folders;
-        dups = lib.unique (lib.filter (name: lib.count (x: x == name) names > 1) names);
-        dupDetails = lib.concatMapStringsSep "\n" (
-          dupName:
+        sharedMagic = [
+          "options.nix"
+          "default.nix"
+        ];
+        sideMagic = {
+          nixos = sharedMagic ++ [ "nixos.nix" ];
+          home = sharedMagic ++ [ "home.nix" ];
+        };
+        relevant = lib.filter (file: builtins.elem file.base magic) (walk dir);
+        folderOf = file: lib.removeSuffix ("/" + file.base) file.rel;
+        nameOf = folder: lib.replaceStrings [ "/" ] [ "." ] folder;
+        folderRecords =
+          map
+            (folder: {
+              inherit folder;
+              name = nameOf folder;
+            })
+            (
+              builtins.attrNames (
+                builtins.listToAttrs (map (file: lib.nameValuePair (folderOf file) true) relevant)
+              )
+            );
+        foldersByName = lib.groupBy (record: record.name) folderRecords;
+        collisions = lib.filterAttrs (_: records: builtins.length records > 1) foldersByName;
+        collisionDetails = lib.concatMapStringsSep "\n" (
+          name:
           let
-            dupFolders = lib.filter (folder: nameOf folder == dupName) folders;
-            paths = lib.concatMapStringsSep ", " (folder: dir + "/" + folder) dupFolders;
+            paths = map (record: dir + "/" + record.folder) collisions.${name};
           in
-          "  - '${dupName}': ${paths}"
-        ) dups;
+          "  - '${name}': ${lib.concatStringsSep ", " paths}"
+        ) (builtins.attrNames collisions);
         checkedFolders =
-          if dups != [ ] then
+          if collisions != { } then
             throw ''
               error: module discovery detected name collisions
 
               the following module names are defined in multiple directories:
-              ${dupDetails}
+              ${collisionDetails}
 
               hint: rename directories to ensure each module has a unique name
             ''
           else
-            folders;
+            folderRecords;
+        fileIndex = builtins.listToAttrs (map (file: lib.nameValuePair file.rel file.path) relevant);
+        pathFor =
+          folder: base:
+          let
+            relative = if folder == "" then base else "${folder}/${base}";
+          in
+          fileIndex.${relative} or null;
+        pathsFor =
+          side: folder: lib.filter (path: path != null) (map (base: pathFor folder base) sideMagic.${side});
         group =
-          pred:
-          lib.listToAttrs (
-            map (
-              folder:
+          side:
+          builtins.listToAttrs (
+            lib.concatMap (
+              record:
               let
-                filesInFolder = lib.concatMap (
-                  base: lib.filter (f: folderOf f == folder && f.base == base && pred base) relevant
-                ) magic;
+                paths = pathsFor side record.folder;
               in
-              lib.nameValuePair (nameOf folder) (map (f: f.path) filesInFolder)
-            ) (lib.filter (folder: lib.any (f: folderOf f == folder && pred f.base) relevant) checkedFolders)
+              lib.optional (paths != [ ]) (lib.nameValuePair record.name paths)
+            ) checkedFolders
           );
-        meta = lib.listToAttrs (
+        meta = builtins.listToAttrs (
           map (
-            folder:
+            record:
             let
-              path = dir + "/" + folder + "/meta.nix";
+              path = dir + "/" + record.folder + "/meta.nix";
             in
-            lib.nameValuePair (nameOf folder) {
+            lib.nameValuePair record.name {
               inherit path;
               value = readMetadata path;
             }
           ) checkedFolders
         );
+        nixos = group "nixos";
+        home = group "home";
+        index = builtins.listToAttrs (
+          map (
+            record:
+            lib.nameValuePair record.name {
+              inherit (record) folder name;
+              role = lib.head (lib.splitString "/" record.folder);
+              common = lib.hasPrefix "_" record.folder;
+              shared = lib.filter (path: path != null) (map (base: pathFor record.folder base) sharedMagic);
+              nixosOnly = lib.optional (pathFor record.folder "nixos.nix" != null) (
+                pathFor record.folder "nixos.nix"
+              );
+              homeOnly = lib.optional (pathFor record.folder "home.nix" != null) (
+                pathFor record.folder "home.nix"
+              );
+              nixos = nixos.${record.name} or [ ];
+              home = home.${record.name} or [ ];
+              meta = meta.${record.name};
+            }
+          ) checkedFolders
+        );
       in
       {
-        nixos = group (b: b == "options.nix" || b == "default.nix" || b == "nixos.nix");
-        home = group (b: b == "options.nix" || b == "default.nix" || b == "home.nix");
-        inherit meta;
+        inherit
+          nixos
+          home
+          meta
+          index
+          ;
       };
 
   importModules =

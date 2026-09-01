@@ -86,9 +86,32 @@ let
       side,
     }:
     let
+      enabledNames = sortNames (lib.unique enabled);
+      enabledSet = lib.genAttrs enabledNames (_: true);
+      dependencies = builtins.listToAttrs (
+        map (
+          name:
+          lib.nameValuePair name (
+            lib.filter (dependency: builtins.hasAttr dependency enabledSet) nodes.${name}.orderAfter
+          )
+        ) enabledNames
+      );
+      dependentPairs = lib.concatMap (
+        name: map (dependency: { inherit name dependency; }) dependencies.${name}
+      ) enabledNames;
+      dependents = lib.mapAttrs (_: pairs: sortNames (map (pair: pair.name) pairs)) (
+        lib.groupBy (pair: pair.dependency) dependentPairs
+      );
+      initialIndegree = builtins.listToAttrs (
+        map (name: lib.nameValuePair name (builtins.length dependencies.${name})) enabledNames
+      );
+      initialReady = lib.filter (name: initialIndegree.${name} == 0) enabledNames;
+
       findCycle =
-        remaining:
+        indegree:
         let
+          remaining = lib.filter (name: indegree.${name} > 0) enabledNames;
+          remainingSet = lib.genAttrs remaining (_: true);
           follow =
             current: path:
             if builtins.elem current path then
@@ -96,43 +119,55 @@ let
             else
               let
                 candidates = sortNames (
-                  lib.filter (name: builtins.elem name remaining) nodes.${current}.orderAfter
+                  lib.filter (name: builtins.hasAttr name remainingSet) dependencies.${current}
                 );
               in
               follow (lib.head candidates) (path ++ [ current ]);
         in
-        follow (lib.head (sortNames remaining)) [ ];
+        follow (lib.head remaining) [ ];
 
       go =
-        remaining: result:
-        if remaining == [ ] then
-          result
+        remainingCount: ready: indegree: result:
+        if remainingCount == 0 then
+          lib.reverseList result
+        else if ready == [ ] then
+          let
+            cycle = findCycle indegree;
+          in
+          throw ''
+            error: 检测到模块循环依赖（${side} 侧）
+
+              ${lib.concatStringsSep " -> " cycle}
+
+            提示：移除其中一个顺序约束，或将共享选项移动到公共模块
+          ''
         else
           let
-            ready = sortNames (
-              lib.filter (
-                name: lib.all (dependency: !builtins.elem dependency remaining) nodes.${name}.orderAfter
-              ) remaining
-            );
+            next = lib.head ready;
+            updated =
+              lib.foldl'
+                (
+                  state: dependent:
+                  let
+                    value = state.indegree.${dependent} - 1;
+                  in
+                  {
+                    indegree = state.indegree // {
+                      ${dependent} = value;
+                    };
+                    newlyReady = lib.optional (value == 0) dependent ++ state.newlyReady;
+                  }
+                )
+                {
+                  inherit indegree;
+                  newlyReady = [ ];
+                }
+                (dependents.${next} or [ ]);
+            nextReady = sortNames (lib.tail ready ++ updated.newlyReady);
           in
-          if ready == [ ] then
-            let
-              cycle = findCycle remaining;
-            in
-            throw ''
-              error: 检测到模块循环依赖（${side} 侧）
-
-                ${lib.concatStringsSep " -> " cycle}
-
-              提示：移除其中一个顺序约束，或将共享选项移动到公共模块
-            ''
-          else
-            let
-              next = lib.head ready;
-            in
-            go (lib.filter (name: name != next) remaining) (result ++ [ next ]);
+          go (remainingCount - 1) nextReady updated.indegree ([ next ] ++ result);
     in
-    go (sortNames enabled) [ ];
+    go (builtins.length enabledNames) initialReady initialIndegree [ ];
 
   buildGraph =
     {
@@ -277,11 +312,12 @@ let
         }) node.before
       ) names;
       edges = lib.unique directEdges;
+      edgesBySource = lib.groupBy (edge: edge.from) edges;
       nodes = lib.mapAttrs (
         name: node:
         node
         // {
-          orderAfter = lib.unique (map (edge: edge.to) (lib.filter (edge: edge.from == name) edges));
+          orderAfter = lib.unique (map (edge: edge.to) (edgesBySource.${name} or [ ]));
         }
       ) baseNodes;
       checkedNodes =
@@ -327,16 +363,12 @@ let
         enabled = names;
         inherit side;
       };
-      capabilities = lib.foldlAttrs (
-        acc: name: node:
-        lib.foldl (
-          result: capability:
-          result
-          // {
-            ${capability} = sortNames (lib.unique ((result.${capability} or [ ]) ++ [ name ]));
-          }
-        ) acc node.provides
-      ) { } checkedNodes;
+      capabilityPairs = lib.concatMap (
+        name: map (capability: { inherit name capability; }) checkedNodes.${name}.provides
+      ) (builtins.attrNames checkedNodes);
+      capabilities = lib.mapAttrs (_: pairs: sortNames (lib.unique (map (pair: pair.name) pairs))) (
+        lib.groupBy (pair: pair.capability) capabilityPairs
+      );
     in
     {
       inherit
@@ -358,10 +390,11 @@ let
     }:
     let
       enabledNames = sortNames (lib.unique enabled);
+      enabledSet = lib.genAttrs enabledNames (_: true);
       missing = lib.concatMap (
         name:
         map (dependency: { inherit name dependency; }) (
-          lib.filter (dependency: !builtins.elem dependency enabledNames) graph.nodes.${name}.requires
+          lib.filter (dependency: !builtins.hasAttr dependency enabledSet) graph.nodes.${name}.requires
         )
       ) enabledNames;
       capabilityRequirements = lib.concatMap (
@@ -369,7 +402,7 @@ let
         map (
           capability:
           let
-            providers = lib.filter (provider: builtins.elem provider enabledNames) (
+            providers = lib.filter (provider: builtins.hasAttr provider enabledSet) (
               graph.capabilities.${capability} or [ ]
             );
           in
@@ -388,12 +421,13 @@ let
           inherit (item) capability;
         }) item.providers
       ) capabilityRequirements;
+      capabilityEdgesBySource = lib.groupBy (edge: edge.from) capabilityEdges;
       effectiveNodes = lib.mapAttrs (
         name: node:
         node
         // {
           orderAfter = lib.unique (
-            node.orderAfter ++ map (edge: edge.to) (lib.filter (edge: edge.from == name) capabilityEdges)
+            node.orderAfter ++ map (edge: edge.to) (capabilityEdgesBySource.${name} or [ ])
           );
         }
       ) graph.nodes;
@@ -412,7 +446,7 @@ let
                 first = conflict;
                 second = name;
               }
-          ) (lib.filter (conflict: builtins.elem conflict enabledNames) graph.nodes.${name}.conflicts)
+          ) (lib.filter (conflict: builtins.hasAttr conflict enabledSet) graph.nodes.${name}.conflicts)
         ) enabledNames
       );
       order = topologicalOrder {

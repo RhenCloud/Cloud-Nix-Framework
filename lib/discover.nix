@@ -81,6 +81,7 @@ let
         nixos = { };
         home = { };
         meta = { };
+        index = { };
       };
 
   moduleGraph = {
@@ -101,17 +102,10 @@ let
     home = lib.concatMap (name: localGroupedModules.home.${name}) moduleGraph.home.order;
   };
 
-  registryModules =
-    lib.foldl
-      (acc: r: {
-        nixos = acc.nixos ++ (r.modules.nixos or [ ]);
-        home = acc.home ++ (r.modules.home or [ ]);
-      })
-      {
-        nixos = [ ];
-        home = [ ];
-      }
-      moduleRegistries;
+  registryModules = {
+    nixos = lib.concatMap (registry: registry.modules.nixos or [ ]) moduleRegistries;
+    home = lib.concatMap (registry: registry.modules.home or [ ]) moduleRegistries;
+  };
 
   rawPackageDirs = onlyDirs (listDirAt "packages");
 
@@ -148,6 +142,47 @@ let
         )
   ) rawPackageDirs;
 
+  hosts = lib.filter (host: host != null) (map parseHostDir (onlyDirs (listDirAt "hosts")));
+  hostsByName = builtins.listToAttrs (map (host: lib.nameValuePair host.name host) hosts);
+
+  homes = map (
+    directory:
+    let
+      files = nixFiles (listDirAt ("homes/" + directory.name));
+      defaultPath =
+        let
+          path = projectRoot + "/homes/" + directory.name + "/default.nix";
+        in
+        if builtins.pathExists path then path else null;
+      hostFiles = lib.filter (file: file.name != "default.nix") files;
+      hostModules = builtins.listToAttrs (
+        map (
+          file:
+          lib.nameValuePair (lib.removeSuffix ".nix" file.name) (
+            projectRoot + "/homes/" + directory.name + "/" + file.name
+          )
+        ) hostFiles
+      );
+    in
+    {
+      user = directory.name;
+      inherit defaultPath hostModules;
+      hosts = builtins.attrNames hostModules;
+    }
+  ) (onlyDirs (listDirAt "homes"));
+  homesByUser = builtins.listToAttrs (map (home: lib.nameValuePair home.user home) homes);
+  usersByHost = lib.mapAttrs (_: records: map (record: record.user) records) (
+    lib.groupBy (record: record.host) (
+      lib.concatMap (
+        home:
+        map (host: {
+          inherit host;
+          inherit (home) user;
+        }) home.hosts
+      ) homes
+    )
+  );
+
 in
 {
   inherit
@@ -159,18 +194,12 @@ in
     nixFiles
     listDirAt
     onlyDirs
+    hosts
+    hostsByName
+    homes
+    homesByUser
+    usersByHost
     ;
-
-  hosts = lib.filter (x: x != null) (map parseHostDir (onlyDirs (listDirAt "hosts")));
-
-  homes = map (d: {
-    user = d.name;
-    hosts = lib.filter (f: f != null) (
-      map (f: if f.name == "default.nix" then null else lib.removeSuffix ".nix" f.name) (
-        nixFiles (listDirAt ("homes/" + d.name))
-      )
-    );
-  }) (onlyDirs (listDirAt "homes"));
 
   packages = directPackages ++ systemFirstPackages;
 

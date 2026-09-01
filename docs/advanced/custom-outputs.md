@@ -66,8 +66,8 @@ Discovery 成功不代表 NixOS 或 Home Manager 配置可完整求值。可按�
 
 ```nix
 outputs.eval = {
-  hosts = true;
-  homes = true;
+  hosts = [ "nixos-desktop" ];
+  homes = [ "rhencloud@nixos-desktop" ];
 };
 ```
 
@@ -78,7 +78,23 @@ checks.<system>.cloud-eval-hosts
 checks.<system>.cloud-eval-homes
 ```
 
-两项默认关闭。检查分别求值 NixOS `system.build.toplevel.drvPath` 和 Home Manager `activationPackage.drvPath`，并移除字符串 context，避免轻量检查持有目标 derivation 的 GC 引用。
+两项默认关闭，也可设为 `true` 检查全部目标。列表中的名称必须已经被发现；未知名称或错误类型会在求值 checks 时直接报错。检查分别求值 NixOS `system.build.toplevel.drvPath` 和 Home Manager `activationPackage.drvPath`，并移除字符串 context，避免轻量检查持有目标 derivation 的 GC 引用。
+
+## 诊断输出控制
+
+默认生成 discovery JSON、全局 DOT 和 per-host DOT。只需要轻量 CI 时可关闭部分诊断：
+
+```nix
+outputs.diagnostics = {
+  discovery = false;
+  moduleGraph = true;
+  perHostModuleGraph = false;
+};
+```
+
+- `discovery = false`：不生成 `cloud-discovery`。
+- `moduleGraph = false`：不生成 `cloud-module-graph-dot`。
+- `perHostModuleGraph = false`：保留全局模块图，但省略 discovery 的 `perHost` 内容和 DOT 的 `hosts/` 子目录。
 
 ## 使用 mkSystem / mkHome 手动构造
 

@@ -151,6 +151,11 @@ inputs.cloud.lib.mkFlake {
       hosts = false;
       homes = false;
     };
+    diagnostics = {
+      discovery = true;
+      moduleGraph = true;
+      perHostModuleGraph = true;
+    };
   };
 
   moduleRegistries = [ ];
@@ -168,7 +173,8 @@ inputs.cloud.lib.mkFlake {
 - `outputs.extra`：与自动生成 outputs 深度合并。
 - `outputs.disabled`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
 - `outputs.expected`：校验框架生成的 output 集合，支持 `subset` / `exact` 及 hosts、homes、packages、apps、checks、devShells、overlays、modules、formatter、deploy、images。
-- `outputs.eval`：按需生成 NixOS / Home Manager 聚合求值检查，默认关闭。
+- `outputs.eval`：按需生成 NixOS / Home Manager 聚合求值检查；字段可为 bool 或目标名称列表，默认关闭。
+- `outputs.diagnostics`：控制 discovery JSON、DOT 模块图及 per-host 模块图，默认全部启用。
 - `moduleRegistries`：按需并入外部模块注册表。
 - `moduleGroups`：注册 all-of 模块组，供模块 metadata 的 `requiresGroups` 使用。
 
@@ -559,7 +565,13 @@ home-manager switch --flake .#rhencloud@nixos-desktop
 nix flake check path:. --show-trace
 ```
 
-框架生成 `checks.<system>.cloud-discovery` JSON 报告和 `cloud-module-graph-dot` 图输出；可通过 `outputs.eval` 启用 `cloud-eval-hosts` / `cloud-eval-homes`。所有 `cloud-*` check 名称由框架保留。
+框架默认生成 `checks.<system>.cloud-discovery` JSON 报告和 `cloud-module-graph-dot` 图输出；可通过 `outputs.eval` 启用 `cloud-eval-hosts` / `cloud-eval-homes`，通过 `outputs.diagnostics` 关闭不需要的诊断。所有 `cloud-*` check 名称由框架保留。
+
+`mkFlake` 在同一次调用内按 system 复用同一个 `pkgs`，并缓存发现索引、主机模块选择和依赖解析结果。测量无 eval cache 的性能时可运行：
+
+```bash
+RUNS=3 ./scripts/benchmark-eval.sh path:. checks.x86_64-linux.newfeatures.drvPath
+```
 
 `deploy`、`homeModules`、`images`、`options` 等自定义 output 在部分 Nix 版本中可能产生 `unknown flake output` 警告；这是原生 Nix 提示，不等同于 check 失败。
 

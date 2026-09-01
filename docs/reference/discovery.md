@@ -407,7 +407,7 @@ mkFlake 调用
 │       ├── deploy/      → discovered.deploy     ( { path, meta } | null )
 │       └── lib/         → discovered.libFiles   [ { name } ]
 │
-├─ [2] 构造 overlays / pkgsFor（不求值任何主机 config）
+├─ [2] 构造 overlays / pkgsBySystem（每个 system 复用一个 package set）
 │
 ├─ [3] 构造 nixosConfigurations（惰性；仅 nix build .#nixosConfigurations.foo 时求值）
 │
@@ -417,7 +417,7 @@ mkFlake 调用
 │
 ├─ [6] 构造 images（按 meta.images.formats 索引；访问具体值时求值对应主机）
 │
-├─ [7] 生成框架保留 checks.*.cloud-discovery（纯 JSON 报告，不构建主机）
+├─ [7] 按 outputs.diagnostics 生成框架保留的 discovery / 模块图 checks
 │
 └─ [8] lib.recursiveUpdate generated outputs.extra
 ```
@@ -442,3 +442,5 @@ mkFlake 调用
 ## Discovery 报告契约
 
 `checks.<system>.cloud-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `cloud-` 前缀。
+
+发现阶段同时维护 `hostsByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。
