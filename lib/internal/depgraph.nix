@@ -42,12 +42,14 @@ let
       if members == [ ] then throw "moduleGroups.${name} 不能为空" else members
     else if builtins.isAttrs value then
       let
-        supportedFields = [
-          "common"
-          "nixos"
-          "home"
-        ];
-        unknownFields = lib.filter (field: !builtins.elem field supportedFields) (builtins.attrNames value);
+        supportedFieldsSet = {
+          common = true;
+          nixos = true;
+          home = true;
+        };
+        unknownFields = lib.filter (field: !builtins.hasAttr field supportedFieldsSet) (
+          builtins.attrNames value
+        );
         common = readStringList {
           field = "moduleGroups.${name}.common";
           metaPath = "mkFlake";
@@ -144,28 +146,13 @@ let
         else
           let
             next = lib.head ready;
-            updated =
-              lib.foldl'
-                (
-                  state: dependent:
-                  let
-                    value = state.indegree.${dependent} - 1;
-                  in
-                  {
-                    indegree = state.indegree // {
-                      ${dependent} = value;
-                    };
-                    newlyReady = lib.optional (value == 0) dependent ++ state.newlyReady;
-                  }
-                )
-                {
-                  inherit indegree;
-                  newlyReady = [ ];
-                }
-                (dependents.${next} or [ ]);
-            nextReady = sortNames (lib.tail ready ++ updated.newlyReady);
+            deps = dependents.${next} or [ ];
+            newVals = map (dep: lib.nameValuePair dep (indegree.${dep} - 1)) deps;
+            newIndegree = indegree // builtins.listToAttrs newVals;
+            newlyReady = lib.filter (nv: nv.value == 0) newVals;
+            nextReady = sortNames (lib.tail ready ++ map (nv: nv.name) newlyReady);
           in
-          go (remainingCount - 1) nextReady updated.indegree ([ next ] ++ result);
+          go (remainingCount - 1) nextReady newIndegree ([ next ] ++ result);
     in
     go (builtins.length enabledNames) initialReady initialIndegree [ ];
 
@@ -280,12 +267,12 @@ let
       ) names;
       unknown = lib.filter (ref: !builtins.hasAttr ref.target baseNodes) references;
       selfReferences = lib.filter (ref: ref.name == ref.target) references;
+      conflictSets = lib.mapAttrs (_: node: lib.genAttrs node.conflicts (_: true)) baseNodes;
       contradictions = lib.concatMap (
         name:
         map (target: { inherit name target; }) (
           lib.filter (
-            target:
-            builtins.elem target baseNodes.${name}.conflicts || builtins.elem name baseNodes.${target}.conflicts
+            target: builtins.hasAttr target conflictSets.${name} || builtins.hasAttr name conflictSets.${target}
           ) baseNodes.${name}.requires
         )
       ) names;
@@ -311,15 +298,12 @@ let
           kind = "before";
         }) node.before
       ) names;
-      edges = lib.unique directEdges;
-      edgesBySource = lib.groupBy (edge: edge.from) edges;
-      nodes = lib.mapAttrs (
-        name: node:
-        node
-        // {
-          orderAfter = lib.unique (map (edge: edge.to) (edgesBySource.${name} or [ ]));
-        }
+      edgesBySource = lib.groupBy (edge: edge.from) directEdges;
+      orderAfterMap = lib.mapAttrs (
+        name: _: lib.unique (map (edge: edge.to) (edgesBySource.${name} or [ ]))
       ) baseNodes;
+      nodes = lib.mapAttrs (name: node: node // { orderAfter = orderAfterMap.${name}; }) baseNodes;
+      edges = lib.unique directEdges;
       checkedNodes =
         if unknown != [ ] then
           let
@@ -422,14 +406,9 @@ let
         }) item.providers
       ) capabilityRequirements;
       capabilityEdgesBySource = lib.groupBy (edge: edge.from) capabilityEdges;
-      effectiveNodes = lib.mapAttrs (
+      effectiveOrderAfterMap = lib.mapAttrs (
         name: node:
-        node
-        // {
-          orderAfter = lib.unique (
-            node.orderAfter ++ map (edge: edge.to) (capabilityEdgesBySource.${name} or [ ])
-          );
-        }
+        lib.unique (node.orderAfter ++ map (edge: edge.to) (capabilityEdgesBySource.${name} or [ ]))
       ) graph.nodes;
       conflicts = lib.unique (
         lib.concatMap (
@@ -450,7 +429,7 @@ let
         ) enabledNames
       );
       order = topologicalOrder {
-        nodes = effectiveNodes;
+        nodes = lib.mapAttrs (name: oa: { orderAfter = oa; }) effectiveOrderAfterMap;
         enabled = enabledNames;
         inherit (graph) side;
       };

@@ -251,11 +251,12 @@ let
           graph = discovered.moduleGraph.${side};
           moduleIndex = discovered.localGroupedModules.index;
           sideOnly = if side == "nixos" then "nixosOnly" else "homeOnly";
+          rolesSet = if roles == null then null else lib.genAttrs roles (_: true);
           selectedByName = lib.mapAttrs (
             name: node:
             let
               record = moduleIndex.${name};
-              roleMatches = record.common || roles == null || builtins.elem record.role roles;
+              roleMatches = record.common || rolesSet == null || builtins.hasAttr record.role rolesSet;
               defaultPaths = record.shared ++ lib.optionals roleMatches record.${sideOnly};
               override = overrideMap.${name} or null;
             in
@@ -266,9 +267,10 @@ let
             else
               defaultPaths
           ) graph.nodes;
-          enabled = lib.filter (name: selectedByName.${name} != [ ]) (builtins.attrNames selectedByName);
+          allNames = builtins.attrNames selectedByName;
+          enabled = lib.filter (name: selectedByName.${name} != [ ]) allNames;
           enabledSet = lib.genAttrs enabled (_: true);
-          disabled = lib.filter (name: !builtins.hasAttr name enabledSet) (builtins.attrNames graph.nodes);
+          disabled = lib.filter (name: !builtins.hasAttr name enabledSet) allNames;
           disabledReasons = builtins.listToAttrs (
             map (
               name:
@@ -624,26 +626,32 @@ let
             ) discovered.hosts
           );
 
+          disabledSet =
+            if builtins.isList disabledOutputs then
+              lib.genAttrs disabledOutputs (_: true)
+            else if builtins.isAttrs disabledOutputs then
+              lib.mapAttrs (_: names: lib.genAttrs names (_: true)) disabledOutputs
+            else
+              throw "disabledOutputs 必须是字符串列表或 output 名到名称列表的属性集";
+
           disabledByName =
             kind: name:
             if builtins.isList disabledOutputs then
-              lib.elem "${kind}.${name}" disabledOutputs
-              || (kind == "formatter" && name == "default" && lib.elem "formatter" disabledOutputs)
-              || (kind == "deploy" && name == "default" && lib.elem "deploy" disabledOutputs)
-            else if builtins.isAttrs disabledOutputs then
-              lib.elem name (disabledOutputs.${kind} or [ ])
+              builtins.hasAttr "${kind}.${name}" disabledSet
+              || (kind == "formatter" && name == "default" && builtins.hasAttr "formatter" disabledSet)
+              || (kind == "deploy" && name == "default" && builtins.hasAttr "deploy" disabledSet)
             else
-              throw "disabledOutputs 必须是字符串列表或 output 名到名称列表的属性集";
+              builtins.hasAttr name (disabledSet.${kind} or { });
 
           disabledForSystem =
             kind: name: system:
             disabledByName kind name
             || (
               if builtins.isList disabledOutputs then
-                lib.elem "${kind}.${system}.${name}" disabledOutputs
-                || (kind == "formatter" && name == "default" && lib.elem "formatter.${system}" disabledOutputs)
+                builtins.hasAttr "${kind}.${system}.${name}" disabledSet
+                || (kind == "formatter" && name == "default" && builtins.hasAttr "formatter.${system}" disabledSet)
               else
-                lib.elem "${system}.${name}" (disabledOutputs.${kind} or [ ])
+                builtins.hasAttr "${system}.${name}" (disabledSet.${kind} or { })
             );
 
           metadataEnabled =
@@ -672,7 +680,7 @@ let
   got: ${builtins.typeOf supportedSystems}"
             else
               enabled
-              && (supportedSystems == null || lib.elem system supportedSystems)
+              && (supportedSystems == null || builtins.elem system supportedSystems)
               && !disabledForSystem kind name system;
 
           uniqueDefinitions =
@@ -690,6 +698,7 @@ let
   ${lib.concatStringsSep ", " duplicates}";
 
           knownSystems = lib.unique (systems ++ lib.systems.flakeExposed);
+          knownSystemsSet = lib.genAttrs knownSystems (_: true);
           packageDefs = map (
             package:
             let
@@ -697,7 +706,9 @@ let
               suffix = lib.last parts;
               hasExplicitMetadata = package.meta ? systems;
               legacySystem =
-                if package.explicitSystem == null && !hasExplicitMetadata && lib.elem suffix knownSystems then
+                if
+                  package.explicitSystem == null && !hasExplicitMetadata && builtins.hasAttr suffix knownSystemsSet
+                then
                   suffix
                 else
                   null;
@@ -861,6 +872,7 @@ let
             )
           ) nixosConfigurations;
 
+          systemsSet = lib.genAttrs systems (_: true);
           checks = forAllSystems systems (
             sys:
             let
@@ -901,16 +913,17 @@ let
                 "deploy"
                 "images"
               ];
+              supportedExpectedFieldsSet = lib.genAttrs supportedExpectedFields (_: true);
               expectedFields = builtins.removeAttrs checkedExpectedOutputs [ "mode" ];
-              unknownExpectedFields = lib.filter (name: !builtins.elem name supportedExpectedFields) (
+              unknownExpectedFields = lib.filter (name: !builtins.hasAttr name supportedExpectedFieldsSet) (
                 builtins.attrNames expectedFields
               );
               checkedExpectedFields =
                 if
-                  !builtins.elem expectedMode [
-                    "subset"
-                    "exact"
-                  ]
+                  !builtins.hasAttr expectedMode {
+                    subset = true;
+                    exact = true;
+                  }
                 then
                   throw "outputs.expected.mode 必须是 \"subset\" 或 \"exact\""
                 else if unknownExpectedFields != [ ] then
@@ -930,7 +943,9 @@ let
                   stringList kind value
                 else if builtins.isAttrs value then
                   let
-                    unknownSystems = lib.filter (system: !builtins.elem system systems) (builtins.attrNames value);
+                    unknownSystems = lib.filter (system: !builtins.hasAttr system systemsSet) (
+                      builtins.attrNames value
+                    );
                     validated = lib.mapAttrs (system: items: stringList "${kind}.${system}" items) value;
                   in
                   if unknownSystems != [ ] then
@@ -943,7 +958,7 @@ let
                 value:
                 let
                   configured = stringList "formatter" value;
-                  unknownSystems = lib.filter (system: !builtins.elem system systems) configured;
+                  unknownSystems = lib.filter (system: !builtins.hasAttr system systemsSet) configured;
                 in
                 if unknownSystems != [ ] then
                   throw "outputs.expected.formatter 包含未配置的 system：${lib.concatStringsSep ", " unknownSystems}"
@@ -978,10 +993,10 @@ let
                   value =
                     checkedExpectedFields.${kind} or (
                       if
-                        builtins.elem kind [
-                          "deploy"
-                          "images"
-                        ]
+                        builtins.hasAttr kind {
+                          deploy = true;
+                          images = true;
+                        }
                       then
                         { }
                       else
@@ -989,12 +1004,12 @@ let
                     );
                 in
                 if
-                  builtins.elem kind [
-                    "packages"
-                    "apps"
-                    "checks"
-                    "devShells"
-                  ]
+                  builtins.hasAttr kind {
+                    packages = true;
+                    apps = true;
+                    checks = true;
+                    devShells = true;
+                  }
                 then
                   perSystemExpected kind value
                 else if kind == "formatter" then
@@ -1027,11 +1042,16 @@ let
               checkExpected =
                 kind:
                 let
-                  expected = sortNames (expectedFor kind);
-                  actual = sortNames actualFor.${kind};
-                  missing = lib.filter (item: !builtins.elem item actual) expected;
+                  expected = lib.unique (expectedFor kind);
+                  actual = lib.unique actualFor.${kind};
+                  actualSet = lib.genAttrs actual (_: true);
+                  expectedSet = lib.genAttrs expected (_: true);
+                  missing = sortNames (lib.filter (item: !builtins.hasAttr item actualSet) expected);
                   unexpected =
-                    if expectedMode == "exact" then lib.filter (item: !builtins.elem item expected) actual else [ ];
+                    if expectedMode == "exact" then
+                      sortNames (lib.filter (item: !builtins.hasAttr item expectedSet) actual)
+                    else
+                      [ ];
                   script = pkgs.writeShellScript "check-discovery-${kind}-${sys}" ''
                     set -euo pipefail
                     missing=${lib.escapeShellArg (builtins.toJSON missing)}
@@ -1060,10 +1080,10 @@ let
               evalKeys = builtins.attrNames checkedEvalOutputs;
               invalidEvalKeys = lib.filter (
                 name:
-                !builtins.elem name [
-                  "hosts"
-                  "homes"
-                ]
+                !builtins.hasAttr name {
+                  hosts = true;
+                  homes = true;
+                }
               ) evalKeys;
               evalHosts = checkedEvalOutputs.hosts or false;
               evalHomes = checkedEvalOutputs.homes or false;
@@ -1134,8 +1154,13 @@ let
                 "moduleGraph"
                 "perHostModuleGraph"
               ];
+              supportedDiagnosticKeysSet = {
+                discovery = true;
+                moduleGraph = true;
+                perHostModuleGraph = true;
+              };
               invalidDiagnosticKeys = lib.filter (
-                name: !builtins.elem name supportedDiagnosticKeys
+                name: !builtins.hasAttr name supportedDiagnosticKeysSet
               ) diagnosticKeys;
               diagnostics = {
                 discovery = checkedDiagnosticsOutputs.discovery or true;
@@ -1209,8 +1234,9 @@ let
                 name: nodes: edges:
                 let
                   selected = sortNames nodes;
+                  selectedSet = lib.genAttrs selected (_: true);
                   selectedEdges = lib.filter (
-                    edge: builtins.elem edge.from selected && builtins.elem edge.to selected
+                    edge: builtins.hasAttr edge.from selectedSet && builtins.hasAttr edge.to selectedSet
                   ) edges;
                   nodeLines = map (node: "  \"${dotEscape node}\";") selected;
                   edgeLines = map (

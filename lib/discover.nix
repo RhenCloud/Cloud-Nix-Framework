@@ -102,10 +102,17 @@ let
     home = lib.concatMap (name: localGroupedModules.home.${name}) moduleGraph.home.order;
   };
 
-  registryModules = {
-    nixos = lib.concatMap (registry: registry.modules.nixos or [ ]) moduleRegistries;
-    home = lib.concatMap (registry: registry.modules.home or [ ]) moduleRegistries;
-  };
+  registryModules =
+    lib.foldl'
+      (acc: registry: {
+        nixos = acc.nixos ++ registry.modules.nixos or [ ];
+        home = acc.home ++ registry.modules.home or [ ];
+      })
+      {
+        nixos = [ ];
+        home = [ ];
+      }
+      moduleRegistries;
 
   rawPackageDirs = onlyDirs (listDirAt "packages");
 

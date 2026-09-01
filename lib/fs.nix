@@ -90,7 +90,8 @@ let
           nixos = sharedMagic ++ [ "nixos.nix" ];
           home = sharedMagic ++ [ "home.nix" ];
         };
-        relevant = lib.filter (file: builtins.elem file.base magic) (walk dir);
+        magicSet = lib.genAttrs magic (_: true);
+        relevant = lib.filter (file: builtins.hasAttr file.base magicSet) (walk dir);
         folderOf = file: lib.removeSuffix ("/" + file.base) file.rel;
         nameOf = folder: lib.replaceStrings [ "/" ] [ "." ] folder;
         folderRecords =
@@ -167,12 +168,16 @@ let
               role = lib.head (lib.splitString "/" record.folder);
               common = lib.hasPrefix "_" record.folder;
               shared = lib.filter (path: path != null) (map (base: pathFor record.folder base) sharedMagic);
-              nixosOnly = lib.optional (pathFor record.folder "nixos.nix" != null) (
-                pathFor record.folder "nixos.nix"
-              );
-              homeOnly = lib.optional (pathFor record.folder "home.nix" != null) (
-                pathFor record.folder "home.nix"
-              );
+              nixosOnly =
+                let
+                  p = pathFor record.folder "nixos.nix";
+                in
+                lib.optional (p != null) p;
+              homeOnly =
+                let
+                  p = pathFor record.folder "home.nix";
+                in
+                lib.optional (p != null) p;
               nixos = nixos.${record.name} or [ ];
               home = home.${record.name} or [ ];
               meta = meta.${record.name};
