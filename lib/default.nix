@@ -157,24 +157,15 @@ let
 
       # overlays: 支持两种签名
       #   final: prev: { ... }                      标准 nixpkgs overlay
-      #   extras: final: prev: ...                  带框架参数的扩展签名（extras = { inputs, self, snowveil }）
       #   { inputs, self, snowveil }: final: prev: ... 带框架参数的解构签名
       loadOverlay =
         path:
         let
           imported = import path;
           argNames = builtins.functionArgs imported;
-          isStructuredArgs = argNames ? inputs || argNames ? self || argNames ? snowveil;
+          isStructured = argNames ? inputs || argNames ? self || argNames ? snowveil;
         in
-        if isStructuredArgs then
-          imported { inherit inputs self snowveil; }
-        else
-          let
-            result = builtins.tryEval (imported {
-              inherit inputs self snowveil;
-            });
-          in
-          if result.success && builtins.isFunction result.value then result.value else imported;
+        if isStructured then imported { inherit inputs self snowveil; } else imported;
 
       overlays = lib.listToAttrs (
         map (o: lib.nameValuePair o.name (loadOverlay o.path)) discovered.overlays
@@ -420,8 +411,7 @@ let
             };
           };
 
-          hostMod = import hostModule;
-          hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ [ hostMod ];
+          hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ [ hostModule ];
 
           embedModule =
             { config, lib, ... }:
@@ -559,12 +549,7 @@ let
         let
           # 解析嵌套命名空间，与扁平参数合并（嵌套命名空间优先）。
           # 扁平参数通过 args_raw 读取，避免 let 递归绑定遮蔽同名参数。
-          flatOr =
-            name: default:
-            if builtins.hasAttr name args_raw then
-              builtins.trace "[Snowveil] mkFlake 参数 '${name}' 已弃用，请使用嵌套命名空间（见文档）" args_raw.${name}
-            else
-              default;
+          flatOr = name: default: if builtins.hasAttr name args_raw then args_raw.${name} else default;
 
           nixpkgsConfig =
             if builtins.hasAttr "config" nixpkgs then nixpkgs.config else flatOr "nixpkgsConfig" { };
@@ -1171,7 +1156,7 @@ let
               diagnostics = {
                 discovery = checkedDiagnosticsOutputs.discovery or true;
                 moduleGraph = checkedDiagnosticsOutputs.moduleGraph or true;
-                perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or true;
+                perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or false;
               };
               invalidDiagnosticValues = lib.filter (
                 name: !builtins.isBool diagnostics.${name}

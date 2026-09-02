@@ -428,11 +428,15 @@ let
           ) (lib.filter (conflict: builtins.hasAttr conflict enabledSet) graph.nodes.${name}.conflicts)
         ) enabledNames
       );
-      order = topologicalOrder {
-        nodes = lib.mapAttrs (name: oa: { orderAfter = oa; }) effectiveOrderAfterMap;
-        enabled = enabledNames;
-        inherit (graph) side;
-      };
+      order =
+        if capabilityEdges == [ ] then
+          lib.filter (name: builtins.hasAttr name enabledSet) graph.order
+        else
+          topologicalOrder {
+            nodes = lib.mapAttrs (name: oa: { orderAfter = oa; }) effectiveOrderAfterMap;
+            enabled = enabledNames;
+            inherit (graph) side;
+          };
     in
     if missing != [ ] then
       let

@@ -49,11 +49,11 @@ snowveil.patches.fromPR {
 
 ```nix
 # overlays/my-pkg/default.nix
-extras: final: prev: {
+{ snowveil, inputs, self, ... }: final: prev: {
   my-pkg = prev.my-pkg.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
-      (extras.snowveil.patches.local ./fix.patch)
-      (extras.snowveil.patches.fromCommit {
+      (snowveil.patches.local ./fix.patch)
+      (snowveil.patches.fromCommit {
         inherit (prev) fetchpatch;
         owner = "upstream";
         repo = "my-pkg";

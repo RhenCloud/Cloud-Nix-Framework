@@ -12,7 +12,7 @@ let
     }) (builtins.attrNames entries);
 
   walk =
-    dir:
+    dir: keep:
     let
       go =
         prefix: current:
@@ -21,17 +21,22 @@ let
           let
             path = current + "/${entry.name}";
             relative = if prefix == "" then entry.name else prefix + "/${entry.name}";
+            base = entry.name;
           in
           if entry.type == "directory" then
-            go relative path
-          else
+            if lib.hasPrefix "." base || base == "result" then [ ] else go relative path
+          else if builtins.hasAttr base keep then
             [
               {
+                inherit
+                  base
+                  path
+                  ;
                 rel = relative;
-                inherit path;
-                base = entry.name;
               }
             ]
+          else
+            [ ]
         ) (listDir current);
     in
     lib.sort (a: b: a.rel < b.rel) (go "" dir);
@@ -91,7 +96,7 @@ let
           home = sharedMagic ++ [ "home.nix" ];
         };
         magicSet = lib.genAttrs magic (_: true);
-        relevant = lib.filter (file: builtins.hasAttr file.base magicSet) (walk dir);
+        relevant = walk dir magicSet;
         folderOf = file: lib.removeSuffix ("/" + file.base) file.rel;
         nameOf = folder: lib.replaceStrings [ "/" ] [ "." ] folder;
         folderRecords =

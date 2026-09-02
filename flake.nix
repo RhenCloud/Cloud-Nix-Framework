@@ -41,6 +41,7 @@
       exampleFlake = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
+        outputs.diagnostics.perHostModuleGraph = true;
         nixos.specialArgs = {
           snowveilTestArg = "injected";
           snowveilNixosOnly = "nixos-only";

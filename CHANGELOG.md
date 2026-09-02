@@ -55,7 +55,7 @@
 
 - `meta.nix` 与 `default.nix` 职责严格分离：`default.nix` 不再被 Snowveil 解析元数据，只交给 NixOS module system。
 - `lib/default.nix` 拆分为 `discover.nix`、`host.nix`、`sops.nix` 等独立文件，发现逻辑与系统构造逻辑分离。
-- overlay 签名检测升级：通过 `functionArgs` 自动识别解构签名（`{ inputs, self, snowveil }: final: prev: ...`）与位置参数签名（`extras: final: prev: ...`）。
+- overlay 签名检测升级：通过 `functionArgs` 自动识别解构签名（`{ inputs, self, snowveil }: final: prev: ...`）；移除了位置参数扩展签名（`extras: final: prev: ...`）与对应的 `tryEval` 探测。
 - `snowveil.patches.fromPR` 标记为已弃用，推荐使用 `snowveil.patches.fromCommit`（固定 commit hash，可复现）。
 - `mkFlake` 按 system 复用 package set，并缓存 discovery 索引、主机模块选择与依赖解析结果。
 - 文件树扁平化、模块分组、重复名称检测和依赖图排序改为索引或分组算法，减少属性集合并和重复线性扫描。

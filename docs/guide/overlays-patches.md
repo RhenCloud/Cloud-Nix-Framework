@@ -21,15 +21,15 @@ final: prev: {
 }
 ```
 
-**带框架参数的扩展签名**（第一个参数接收 `{ inputs, self, snowveil }`）：
+**带框架参数的解构签名**（第一个参数接收 `{ inputs, self, snowveil }`）：
 
 ```nix
 # overlays/foo/default.nix
-extras: final: prev: {
+{ snowveil, inputs, self, ... }: final: prev: {
   foo = prev.foo.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
-      (extras.snowveil.patches.local ./fix.patch)
-      (extras.snowveil.patches.fromCommit {
+      (snowveil.patches.local ./fix.patch)
+      (snowveil.patches.fromCommit {
         inherit (prev) fetchpatch;
         owner = "NixOS";
         repo = "nixpkgs";
@@ -41,15 +41,7 @@ extras: final: prev: {
 }
 ```
 
-也可使用解构参数：
-
-```nix
-{ snowveil, inputs, self }: final: prev: {
-  ...
-}
-```
-
-框架通过 `functionArgs` 检测解构签名（参数名含 `inputs`、`self` 或 `snowveil`）；若检测不到，则尝试以 `{ inherit inputs self snowveil; }` 调用，如返回函数则视为扩展签名，否则当作普通 overlay 使用。
+框架通过 `functionArgs` 检测解构签名（参数名含 `inputs`、`self` 或 `snowveil`）；只有这一种带框架参数的签名，其余均视为标准 nixpkgs overlay（`final: prev: ...`）。
 
 ## 统一 nixpkgs 配置
 

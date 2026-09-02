@@ -1,7 +1,12 @@
-extras: final: prev: {
+{
+  snowveil,
+  self,
+  ...
+}:
+final: prev: {
   snowveil-example = prev.runCommand "snowveil-example" { } ''
     echo "overlay-ok" > "$out"
   '';
-  snowveil-common = toString extras.snowveil.sops.commonFile;
-  snowveil-self = toString extras.self.outPath;
+  snowveil-common = toString snowveil.sops.commonFile;
+  snowveil-self = toString self.outPath;
 }

@@ -326,11 +326,10 @@ overlays/<name>/default.nix  →  overlays.<name>
 
 ### Overlay 文件签名
 
-框架按以下顺序检测签名：
+框架按以下规则检测签名：
 
 1. `functionArgs` 含 `inputs`、`self` 或 `snowveil` → 解构框架参数签名，调用 `imported { inherit inputs self snowveil; }`。
-2. 以 `{ inherit inputs self snowveil; }` 调用后返回函数 → 位置参数框架签名（如 `extras: final: prev: ...`）。
-3. 其余 → 标准 nixpkgs overlay（`final: prev: ...` 或直接返回属性集，但后者会在 nixpkgs 应用时报错）。
+2. 其余 → 标准 nixpkgs overlay（`final: prev: ...` 或直接返回属性集，但后者会在 nixpkgs 应用时报错）。
 
 ### meta.nix 字段（overlays）
 
