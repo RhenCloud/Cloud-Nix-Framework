@@ -55,22 +55,26 @@ let
     let
       rawName = e.name;
       metaPath = projectRoot + "/hosts/" + rawName + "/meta.nix";
-      meta = readMetadata metaPath;
       defPath = projectRoot + "/hosts/" + rawName + "/default.nix";
-      system = meta.system or null;
+      meta = readMetadata metaPath;
     in
     if !builtins.pathExists defPath then
       null
-    else if system == null then
-      builtins.throw "云框架错误：hosts/${rawName}/meta.nix 必须声明 system（例如 system = \"x86_64-linux\"）"
     else
       {
         dir = rawName;
         name = rawName;
-        inherit system;
         path = defPath;
         inherit metaPath;
         inherit meta;
+        system =
+          let
+            sys = meta.system or null;
+          in
+          if sys == null then
+            builtins.throw "Snowveil 框架错误：hosts/${rawName}/meta.nix 必须声明 system（例如 system = \"x86_64-linux\"）"
+          else
+            sys;
       };
 
   localGroupedModules =
