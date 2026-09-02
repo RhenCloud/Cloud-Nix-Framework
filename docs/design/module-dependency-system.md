@@ -185,7 +185,7 @@ Discovery 阶段负责：
 
 ## 6. 可观测性
 
-`checks.<system>.cloud-discovery` JSON 报告包含全局图与每主机结果：
+`checks.<system>.snowveil-discovery` JSON 报告包含全局图与每主机结果：
 
 ```json
 {
@@ -275,4 +275,4 @@ error: 主机 'nixos-desktop' 的模块依赖不完整（nixos 侧）
 后续候选：
 
 - 为 `moduleRegistries` 增加命名节点并纳入图；
-- 由独立 Cloud CLI 消费 discovery JSON 和 DOT，提供交互式 `graph` / `why` 命令。
+- 由独立 Snowveil CLI 消费 discovery JSON 和 DOT，提供交互式 `graph` / `why` 命令。

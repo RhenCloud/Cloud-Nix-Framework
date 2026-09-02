@@ -15,7 +15,7 @@ in
     {
       root,
       excludes ? [ ],
-      name ? "cloud-project-source",
+      name ? "snowveil-project-source",
     }:
     let
       rootString = toString root;

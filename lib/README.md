@@ -1,4 +1,4 @@
-# Cloud Nix Framework - Library Structure
+# Snowveil - Library Structure
 
 本目录包含框架的所有库代码。
 

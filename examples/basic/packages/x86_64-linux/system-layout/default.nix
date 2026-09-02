@@ -1,2 +1,2 @@
 { writeText }:
-writeText "cloud-system-layout" "x86_64-linux"
+writeText "snowveil-system-layout" "x86_64-linux"

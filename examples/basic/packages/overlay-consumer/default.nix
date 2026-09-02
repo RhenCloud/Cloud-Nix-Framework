@@ -1,4 +1,4 @@
 {
-  cloud-example,
+  snowveil-example,
 }:
-cloud-example
+snowveil-example

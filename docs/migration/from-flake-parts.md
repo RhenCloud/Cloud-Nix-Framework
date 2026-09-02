@@ -7,14 +7,14 @@
 
 ## 主要差异
 
-| | flake.parts | Cloud Nix Framework |
+| | flake.parts | Snowveil |
 | ---- | ---- | ---- |
 | 范式 | 显式模块组合 | 目录约定自动发现 |
 | 扩展方式 | flakeModule | 约定目录 + outputs.extra |
 | 目录发现 | 可选（autowiring） | 核心特性 |
 | NixOS + HM 集成 | 需要组合模块 | 内置 |
 
-## 何时选择 CNF
+## 何时选择 Snowveil
 
 - 配置仓库以 NixOS + home-manager 为主
 - 希望目录结构即配置意图，减少样板代码
@@ -28,11 +28,11 @@
 
 ## 混合使用
 
-CNF 可以通过 `outputs.extra` 与 flake.parts 产出并存，无需完整迁移：
+Snowveil 可以通过 `outputs.extra` 与 flake.parts 产出并存，无需完整迁移：
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
     outputs.extra = {
       # 从 flake.parts 迁移过来的其他 outputs
@@ -42,4 +42,4 @@ outputs = inputs:
 
 ## perSystem 对应
 
-flake.parts 的 `perSystem` 在 CNF 中对应 `packages/`、`checks/`、`apps/`、`shells/`、`formatter/` 等目录约定。框架内部使用 `lib.genAttrs systems` 实现 per-system 展开。
+flake.parts 的 `perSystem` 在 Snowveil 中对应 `packages/`、`checks/`、`apps/`、`shells/`、`formatter/` 等目录约定。框架内部使用 `lib.genAttrs systems` 实现 per-system 展开。

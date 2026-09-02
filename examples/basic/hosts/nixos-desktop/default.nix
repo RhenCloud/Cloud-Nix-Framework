@@ -18,7 +18,7 @@
 
     environment = {
       systemPackages = [ pkgs.hello ];
-      variables.CLOUD_HOST_CONFIG_ARG = config.networking.hostName;
+      variables.SNOWVEIL_HOST_CONFIG_ARG = config.networking.hostName;
     };
   };
 }

@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Cloud Nix Framework
+  name: Snowveil
   text: 约定优于配置的 NixOS 框架
   tagline: 目录结构即配置意图，自动发现主机、模块与 Home Manager 配置
   actions:
@@ -14,7 +14,7 @@ hero:
       link: /concepts/philosophy
     - theme: alt
       text: 在 GitHub 查看
-      link: https://github.com/RhenCloud/Cloud-Nix-Framework
+      link: https://github.com/SnowveilOrg/Snowveil
 
 features:
   - title: 目录即配置

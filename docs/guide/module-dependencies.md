@@ -105,10 +105,10 @@ moduleGroups = {
 ## 图与诊断
 
 ```bash
-nix build .#checks.x86_64-linux.cloud-discovery
+nix build .#checks.x86_64-linux.snowveil-discovery
 jq '.moduleGraph, .perHost' result
 
-nix build .#checks.x86_64-linux.cloud-module-graph-dot
+nix build .#checks.x86_64-linux.snowveil-module-graph-dot
 find result -name '*.dot' -print
 ```
 

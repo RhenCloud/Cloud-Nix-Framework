@@ -4,5 +4,5 @@
   ...
 }:
 {
-  home.sessionVariables.CLOUD_EXAMPLE = lib.mkIf config.cloud.example.enable "home:enabled";
+  home.sessionVariables.SNOWVEIL_EXAMPLE = lib.mkIf config.snowveil.example.enable "home:enabled";
 }

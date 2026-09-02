@@ -3,5 +3,5 @@
   ...
 }:
 {
-  environment.variables.CLOUD_EXAMPLE = config.cloud.example.message;
+  environment.variables.SNOWVEIL_EXAMPLE = config.snowveil.example.message;
 }

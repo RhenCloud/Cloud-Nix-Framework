@@ -2,10 +2,10 @@
 { lib }:
 
 {
-  optionsCloud =
+  optionsSnowveil =
     { lib, ... }:
     {
-      options.cloud = {
+      options.snowveil = {
         users = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
@@ -25,10 +25,10 @@
       };
     };
 
-  optionsCloudHome =
+  optionsSnowveilHome =
     { lib, ... }:
     {
-      options.cloud = {
+      options.snowveil = {
         users = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];

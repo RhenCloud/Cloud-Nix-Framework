@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "cloud-nix-framework-docs",
+      "name": "snowveil-docs",
       "devDependencies": {
         "vitepress": "^1.6.0",
       },

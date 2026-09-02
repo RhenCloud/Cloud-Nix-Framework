@@ -25,10 +25,10 @@ sops-nix = {
 
 ```nix
 # hosts/nixos-desktop/default.nix
-{ cloud, inputs, ... }:
+{ snowveil, inputs, ... }:
 {
   imports = [
-    (cloud.sops.mkModule {
+    (snowveil.sops.mkModule {
       sopsNixModule = inputs.sops-nix.nixosModules.sops;
       host = "nixos-desktop";
     })
@@ -43,15 +43,15 @@ sops-nix = {
 ### 明确指定 host
 
 ```nix
-{ cloud, ... }:
+{ snowveil, ... }:
 {
   imports = [
-    (cloud.sops.secret {
+    (snowveil.sops.secret {
       source = "common";
       name = "password-hash";
     })
 
-    (cloud.sops.secret {
+    (snowveil.sops.secret {
       source = "host";
       host = "nixos-desktop";
       name = "mihomo-proxies";
@@ -65,11 +65,11 @@ sops-nix = {
 `source = "host"` 省略 `host` 参数时，helper 返回一个 NixOS module，在求值阶段从 `config.networking.hostName` 自动推导路径。适合多主机共用同名 secret、各自对应 `secrets/hosts/<host>.yaml` 的场景：
 
 ```nix
-{ cloud, ... }:
+{ snowveil, ... }:
 {
   imports = [
     # 自动使用 config.networking.hostName 推导 secrets/hosts/<host>.yaml
-    (cloud.sops.secret {
+    (snowveil.sops.secret {
       source = "host";
       name = "mihomo-proxies";
     })
@@ -86,10 +86,10 @@ sops-nix = {
 需要普通 option 属性集而不是 module 时，可显式传入当前 `config`：
 
 ```nix
-{ cloud, config, ... }:
+{ snowveil, config, ... }:
 {
   sops.secrets.api-token =
-    cloud.sops.secret {
+    snowveil.sops.secret {
       source = "host";
       inherit config;
     }
@@ -106,7 +106,7 @@ sops-nix = {
 
 ```nix
 sops.secrets.password-hash =
-  cloud.sops.secret {
+  snowveil.sops.secret {
     source = "common";
   }
   // {
@@ -116,20 +116,20 @@ sops.secrets.password-hash =
 
 ## API
 
-- `cloud.sops.commonFile`：`<root>/secrets/common.yaml` 路径
-- `cloud.sops.hostFile host`：`<root>/secrets/hosts/<host>.yaml` 路径
-- `cloud.sops.defaultFile host`：`host == null` 时取 `commonFile`，否则取 `hostFile host`
-- `cloud.sops.secret { source; host?; config?; name?; }`：
+- `snowveil.sops.commonFile`：`<root>/secrets/common.yaml` 路径
+- `snowveil.sops.hostFile host`：`<root>/secrets/hosts/<host>.yaml` 路径
+- `snowveil.sops.defaultFile host`：`host == null` 时取 `commonFile`，否则取 `hostFile host`
+- `snowveil.sops.secret { source; host?; config?; name?; }`：
   - `source = "common"` → 返回 `{ sopsFile = ...; }` 或带 `name` 时返回 module/attrset
   - `source = "host"; host = "foo"` → 返回明确路径的属性集/module
   - `source = "host"; config = config` → 返回可直接合并的普通属性集
   - `source = "host"`（省略 `host` 和 `config`）→ 返回 NixOS module，求值时从 `config.networking.hostName` 推导
-- `cloud.sops.mkModule { sopsNixModule; host?; defaultSopsFile?; }`
+- `snowveil.sops.mkModule { sopsNixModule; host?; defaultSopsFile?; }`
 
 ## 自定义默认文件
 
 ```nix
-cloud.sops.mkModule {
+snowveil.sops.mkModule {
   sopsNixModule = inputs.sops-nix.nixosModules.sops;
   defaultSopsFile = ./secrets/combined.yaml;
 }

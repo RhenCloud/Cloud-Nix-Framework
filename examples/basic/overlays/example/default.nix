@@ -1,7 +1,7 @@
 extras: final: prev: {
-  cloud-example = prev.runCommand "cloud-example" { } ''
+  snowveil-example = prev.runCommand "snowveil-example" { } ''
     echo "overlay-ok" > "$out"
   '';
-  cloud-common = toString extras.cloud.sops.commonFile;
-  cloud-self = toString extras.self.outPath;
+  snowveil-common = toString extras.snowveil.sops.commonFile;
+  snowveil-self = toString extras.self.outPath;
 }

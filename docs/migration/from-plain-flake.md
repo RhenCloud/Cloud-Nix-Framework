@@ -7,8 +7,8 @@
 ```nix
 # flake.nix
 inputs = {
-  cloud = {
-    url = "github:RhenCloud/Cloud-Nix-Framework";
+  snowveil = {
+    url = "github:SnowveilOrg/Snowveil";
     inputs.nixpkgs.follows = "nixpkgs";
     inputs.home-manager.follows = "home-manager";  # 若使用 HM
   };
@@ -32,7 +32,7 @@ outputs = { self, nixpkgs, home-manager, ... }@inputs: {
 **之后**：
 
 ```nix
-outputs = inputs: inputs.cloud.lib.mkFlake { inherit inputs; };
+outputs = inputs: inputs.snowveil.lib.mkFlake { inherit inputs; };
 ```
 
 ### 3. 重组目录结构
@@ -86,12 +86,12 @@ overlays/foo/default.nix  →  overlays.foo
 ```nix
 outputs = inputs:
   let
-    cloud = inputs.cloud.lib.mkLib { inherit inputs; };
+    snowveil = inputs.snowveil.lib.mkLib { inherit inputs; };
   in
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
     outputs.extra = {
-      nixosConfigurations.special-host = cloud.mkSystem {
+      nixosConfigurations.special-host = snowveil.mkSystem {
         host = "special-host";
         system = "x86_64-linux";
         modules = [ ./special/config.nix ];
@@ -102,9 +102,9 @@ outputs = inputs:
 
 ## 常见问题
 
-**Q：`inputs.cloud.mkFlake` 还是 `inputs.cloud.lib.mkFlake`？**
+**Q：`inputs.snowveil.mkFlake` 还是 `inputs.snowveil.lib.mkFlake`？**
 
-始终使用 `inputs.cloud.lib.mkFlake`。`lib` 是框架的 output 命名空间，`mkFlake` 在其下。
+始终使用 `inputs.snowveil.lib.mkFlake`。`lib` 是框架的 output 命名空间，`mkFlake` 在其下。
 
 **Q：迁移后 `config` 在模块外层不能用了？**
 

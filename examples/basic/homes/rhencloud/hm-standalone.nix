@@ -1,3 +1,3 @@
 _: {
-  home.sessionVariables.CLOUD_STANDALONE = "1";
+  home.sessionVariables.SNOWVEIL_STANDALONE = "1";
 }

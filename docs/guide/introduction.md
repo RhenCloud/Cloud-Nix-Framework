@@ -1,6 +1,6 @@
 # 介绍
 
-Cloud Nix Framework 是一个基于 Nix Flakes 的声明式配置框架，融合三个优秀项目的设计理念：
+Snowveil 是一个基于 Nix Flakes 的声明式配置框架，融合三个优秀项目的设计理念：
 
 | 参考项目 | 借鉴的设计 |
 | -------- | ---------- |
@@ -20,7 +20,7 @@ Cloud Nix Framework 是一个基于 Nix Flakes 的声明式配置框架，融合
 
 ## 与其他框架对比
 
-| | Cloud Nix Framework | snowfallorg/lib | flake-fhs | flake.parts | nixos-unified | den |
+| | Snowveil | snowfallorg/lib | flake-fhs | flake.parts | nixos-unified | den |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | 定位 | 约定式配置框架 | 统一配置库 | 目录映射 outputs | 通用 flake 模块系统 | 三平台统一配置模块 | 面向切面、功能优先 |
 | 组织方式 | 目录约定 + 单树分拣 | 目录约定 + 分类 | 目录树即 flake | flake 模块系统 | flake-parts 模块 + autowiring | aspect 函数 + policy |

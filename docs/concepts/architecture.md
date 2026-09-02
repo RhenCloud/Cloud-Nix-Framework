@@ -54,8 +54,8 @@ lib/
 框架按以下顺序合并模块，后者优先级高于前者：
 
 ```
-1. optionsCloud（框架 options 声明：cloud.users、cloud.homeManager.*）
-2. setCloudModule（写入 config.cloud.users）
+1. optionsSnowveil（框架 options 声明：snowveil.users、snowveil.homeManager.*）
+2. setSnowveilModule（写入 config.snowveil.users）
 3. nixpkgs.pkgs 注入
 4. embedModule（home-manager NixOS 模块，仅当启用嵌入且 users != []）
 5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
@@ -67,7 +67,7 @@ lib/
 
 ## specialArgs 注入路径
 
-所有 NixOS 模块均收到：`inputs`、`self`、`cloud`（含 `patches`、`sops`）以及 `nixos.specialArgs`。
+所有 NixOS 模块均收到：`inputs`、`self`、`snowveil`（含 `patches`、`sops`）以及 `nixos.specialArgs`。
 
 嵌入式 home-manager 的 specialArgs 写入 `home-manager.extraSpecialArgs`，与独立 HM 行为一致。
 

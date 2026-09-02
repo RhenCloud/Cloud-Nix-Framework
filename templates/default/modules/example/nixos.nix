@@ -4,5 +4,5 @@
   ...
 }:
 {
-  environment.variables.CLOUD_EXAMPLE = lib.mkIf config.cloud.example.enable "nixos:enabled";
+  environment.variables.SNOWVEIL_EXAMPLE = lib.mkIf config.snowveil.example.enable "nixos:enabled";
 }

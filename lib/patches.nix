@@ -2,7 +2,7 @@
   local = path: path;
 
   # 固定到具体 commit，可复现性高于 PR patch URL
-  # 用法：cloud.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }
+  # 用法：snowveil.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }
   fromCommit =
     {
       fetchpatch,

@@ -18,14 +18,14 @@ homes/
 
 ## 嵌入式 HM
 
-当 `homes/<user>/<host>.nix` 存在时，框架自动将该用户注入 `nixosConfigurations.<host>` 的 `config.cloud.users`，并在嵌入启用时生成 `home-manager.users.<user>` 配置，无需手写。
+当 `homes/<user>/<host>.nix` 存在时，框架自动将该用户注入 `nixosConfigurations.<host>` 的 `config.snowveil.users`，并在嵌入启用时生成 `home-manager.users.<user>` 配置，无需手写。
 
 全局启用，单独关闭：
 
 ```nix
 # flake.nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
 
     home.embed = {
@@ -54,7 +54,7 @@ outputs = inputs:
 # modules/desktop/hyprland/default.nix（共享 option 声明）
 { lib, ... }:
 {
-  options.cloud.hyprland.enable = lib.mkEnableOption "Hyprland";
+  options.snowveil.hyprland.enable = lib.mkEnableOption "Hyprland";
 }
 ```
 
@@ -62,7 +62,7 @@ outputs = inputs:
 # modules/desktop/hyprland/home.nix（用户级配置）
 { config, lib, ... }:
 {
-  config = lib.mkIf config.cloud.hyprland.enable {
+  config = lib.mkIf config.snowveil.hyprland.enable {
     wayland.windowManager.hyprland.enable = true;
   };
 }

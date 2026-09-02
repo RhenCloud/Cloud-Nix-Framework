@@ -77,20 +77,20 @@ modules/
 # modules/desktop/hyprland/nixos.nix
 { config, lib, ... }:
 {
-  config = lib.mkIf config.cloud.hyprland.enable {
+  config = lib.mkIf config.snowveil.hyprland.enable {
     # ...
   };
 }
 ```
 
-这样即使同属 `desktop` 角色，用户也可以通过 `cloud.hyprland.enable = false` 禁用单个功能。
+这样即使同属 `desktop` 角色，用户也可以通过 `snowveil.hyprland.enable = false` 禁用单个功能。
 
 ## 调试模块加载
 
 查看框架发现了哪些模块：
 
 ```bash
-nix build .#checks.x86_64-linux.cloud-discovery && cat result | python3 -m json.tool
+nix build .#checks.x86_64-linux.snowveil-discovery && cat result | python3 -m json.tool
 ```
 
 输出中 `modules` 字段列出所有已发现模块及其路径和角色归属。

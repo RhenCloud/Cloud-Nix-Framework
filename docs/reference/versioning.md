@@ -1,19 +1,19 @@
 # 版本策略
 
-Cloud Nix Framework 采用 [Semantic Versioning 2.0.0](https://semver.org/lang/zh-CN/)。
+Snowveil 采用 [Semantic Versioning 2.0.0](https://semver.org/lang/zh-CN/)。
 
 ## 当前版本
 
 ```nix
-inputs.cloud.lib.version
+inputs.snowveil.lib.version
 # → { major = 0; minor = 5; patch = 0; pre = "dev"; string = "0.5.0-dev"; }
 ```
 
 `string` 字段适合日志输出，结构字段适合程序判断：
 
 ```nix
-assert inputs.cloud.lib.version.major == 0;
-assert inputs.cloud.lib.version.minor >= 5;
+assert inputs.snowveil.lib.version.major == 0;
+assert inputs.snowveil.lib.version.minor >= 5;
 ```
 
 ## 0.x 阶段承诺
@@ -60,7 +60,7 @@ Discovery 约定（目录结构到 output key 的映射）与核心 API（`mkFla
 ::: code-group
 
 ```nix [旧写法（弃用）]
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   nixpkgsConfig = { allowUnfree = true; };
   extraOverlays = [ myOverlay ];
@@ -72,7 +72,7 @@ inputs.cloud.lib.mkFlake {
 ```
 
 ```nix [新写法（推荐）]
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   nixpkgs = {
     config = { allowUnfree = true; };
@@ -100,18 +100,18 @@ inputs.cloud.lib.mkFlake {
 | `homeManager.embed` | `home.embed` |
 | `homeManager.useGlobalPkgs` | `home.useGlobalPkgs` |
 
-### cloud.patches.fromPR
+### snowveil.patches.fromPR
 
-已弃用，改用 `cloud.patches.fromCommit`（固定 commit hash，可复现）。
+已弃用，改用 `snowveil.patches.fromCommit`（固定 commit hash，可复现）。
 
 ## Feature Detection
 
 在用户仓库模块中可以通过 `version` 做条件处理（例如框架升级过渡期）：
 
 ```nix
-{ cloud, lib, ... }:
+{ snowveil, lib, ... }:
 let
-  v = cloud.version or { major = 0; minor = 0; patch = 0; };
+  v = snowveil.version or { major = 0; minor = 0; patch = 0; };
 in
 {
   # 0.3+ 才有的特性
@@ -119,8 +119,8 @@ in
 }
 ```
 
-注意：模块参数中的 `cloud` 是精简命名空间，仅包含 `patches`、`sops` 与 `version`，不是完整的 `inputs.cloud.lib`。
+注意：模块参数中的 `snowveil` 是精简命名空间，仅包含 `patches`、`sops` 与 `version`，不是完整的 `inputs.snowveil.lib`。
 
 ## 完整变更记录
 
-见 [CHANGELOG.md](https://github.com/RhenCloud/Cloud-Nix-Framework/blob/main/CHANGELOG.md)。
+见 [CHANGELOG.md](https://github.com/SnowveilOrg/Snowveil/blob/main/CHANGELOG.md)。

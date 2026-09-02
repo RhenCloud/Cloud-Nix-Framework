@@ -1,11 +1,11 @@
 # 调试与问题排查
 
-## cloud-discovery 报告
+## snowveil-discovery 报告
 
 查看框架发现了哪些主机、模块和包：
 
 ```bash
-nix build .#checks.x86_64-linux.cloud-discovery
+nix build .#checks.x86_64-linux.snowveil-discovery
 cat result | python3 -m json.tool
 ```
 
@@ -39,7 +39,7 @@ nix flake check path:. --show-trace 2>&1 | grep -i "skip\|trace\|warn"
 
 原因：角色配置不正确，或 `_common` 前缀使用错误。
 
-检查 `cloud-discovery` 报告中 `modules` 字段的角色归属。
+检查 `snowveil-discovery` 报告中 `modules` 字段的角色归属。
 
 ### 嵌入式 HM 报"option not found"
 
@@ -47,7 +47,7 @@ nix flake check path:. --show-trace 2>&1 | grep -i "skip\|trace\|warn"
 
 解决：
 
-1. 使用 `cloud.homeManager.backupFileExtension` 代替 `home-manager.backupFileExtension`
+1. 使用 `snowveil.homeManager.backupFileExtension` 代替 `home-manager.backupFileExtension`
 2. 或将该配置移到按角色过滤的模块
 
 ### VitePress 构建错误：`Element is missing end tag`
@@ -70,9 +70,9 @@ nix flake check path:. --show-trace 2>&1 | grep "trace:"
 
 常见 trace：
 
-- `trace: [CNF] 主机 foo 缺少 default.nix，跳过` → 缺少主机文件
-- `trace: [CNF] meta.nix 字段 embedHomeManager 已弃用` → 使用了旧字段
-- `trace: [CNF] 发现 homes/... 但找不到对应主机` → host.nix 文件名与主机目录不匹配
+- `trace: [Snowveil] 主机 foo 缺少 default.nix，跳过` → 缺少主机文件
+- `trace: [Snowveil] meta.nix 字段 embedHomeManager 已弃用` → 使用了旧字段
+- `trace: [Snowveil] 发现 homes/... 但找不到对应主机` → host.nix 文件名与主机目录不匹配
 
 ## 隔离求值
 

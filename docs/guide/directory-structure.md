@@ -108,7 +108,7 @@
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
 
     home.embed = {
@@ -118,7 +118,7 @@ outputs = inputs:
   };
 ```
 
-主机 `meta.nix` 中的设置优先于全局策略。`cloud.users` 仍由框架根据目录写入，供模块读取，不应手动赋值。
+主机 `meta.nix` 中的设置优先于全局策略。`snowveil.users` 仍由框架根据目录写入，供模块读取，不应手动赋值。
 
 ## Package 元数据
 

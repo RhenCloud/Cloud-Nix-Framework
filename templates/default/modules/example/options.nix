@@ -6,12 +6,12 @@
 }:
 with lib;
 {
-  options.cloud.example = {
+  options.snowveil.example = {
     enable = mkEnableOption "example module";
 
     message = mkOption {
       type = types.str;
-      default = "Hello from Cloud Nix Framework";
+      default = "Hello from Snowveil";
       description = "Custom message for the example module";
     };
   };

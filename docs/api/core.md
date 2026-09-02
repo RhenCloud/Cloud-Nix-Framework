@@ -1,6 +1,6 @@
 # 核心 API
 
-框架通过 flake 的 `lib` output 暴露统一命名空间。用户 flake 中的完整入口是 `inputs.cloud.lib.mkFlake`。
+框架通过 flake 的 `lib` output 暴露统一命名空间。用户 flake 中的完整入口是 `inputs.snowveil.lib.mkFlake`。
 
 ## `mkFlake`
 
@@ -9,7 +9,7 @@
 **推荐写法（嵌套命名空间，0.3.0+）**：
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
 
   # 可选；通常自动推导
@@ -78,7 +78,7 @@ inputs.cloud.lib.mkFlake {
 使用旧扁平参数时会输出 `builtins.trace` 警告，但不会报错。建议迁移到嵌套命名空间。
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   nixpkgsConfig = { allowUnfree = true; };  # → nixpkgs.config
   extraOverlays = [ ];                       # → nixpkgs.overlays
@@ -158,10 +158,10 @@ outputs.disabled = {
 ```nix
 outputs = inputs:
   let
-    cloud = inputs.cloud.lib.mkLib { inherit inputs; };
+    snowveil = inputs.snowveil.lib.mkLib { inherit inputs; };
   in
   {
-    nixosConfigurations.nixos-desktop = cloud.mkSystem {
+    nixosConfigurations.nixos-desktop = snowveil.mkSystem {
       host = "nixos-desktop";
       system = "x86_64-linux";
       modules = [ ];
@@ -186,10 +186,10 @@ outputs = inputs:
 ```nix
 outputs = inputs:
   let
-    cloud = inputs.cloud.lib.mkLib { inherit inputs; };
+    snowveil = inputs.snowveil.lib.mkLib { inherit inputs; };
   in
   {
-    homeConfigurations."rhencloud@nixos-desktop" = cloud.mkHome {
+    homeConfigurations."rhencloud@nixos-desktop" = snowveil.mkHome {
       user = "rhencloud";
       host = "nixos-desktop";
       system = "x86_64-linux"; # 仅全局 home 使用
@@ -207,19 +207,19 @@ outputs = inputs:
 ## `mkLib`
 
 ```nix
-inputs.cloud.lib.mkLib { inherit inputs; }
+inputs.snowveil.lib.mkLib { inherit inputs; }
 ```
 
-返回已绑定当前 flake 的 `cloud` 命名空间。
+返回已绑定当前 flake 的 `snowveil` 命名空间。
 
 ## `version`
 
 ```nix
-inputs.cloud.lib.version
+inputs.snowveil.lib.version
 # → { major = 0; minor = 5; patch = 0; pre = "dev"; string = "0.5.0-dev"; }
 ```
 
-版本号也可从模块内的 `cloud` 参数读取（`cloud.version`）。适合在用户模块中做 feature detection 或记录依赖版本。详见[版本策略](/reference/versioning)。
+版本号也可从模块内的 `snowveil` 参数读取（`snowveil.version`）。适合在用户模块中做 feature detection 或记录依赖版本。详见[版本策略](/reference/versioning)。
 
 ## 自动发现函数
 
@@ -231,17 +231,17 @@ inputs.cloud.lib.version
 
 ## Patch helper
 
-- `cloud.patches.local path`
-- `cloud.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }` — 固定到具体 commit，可复现；**推荐**
-- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }` — **已弃用**，PR 再次推送后 hash 改变；请改用 `fromCommit`
+- `snowveil.patches.local path`
+- `snowveil.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }` — 固定到具体 commit，可复现；**推荐**
+- `snowveil.patches.fromPR { fetchpatch; owner; repo; pr; hash; }` — **已弃用**，PR 再次推送后 hash 改变；请改用 `fromCommit`
 
 ## SOPS helper
 
-- `cloud.sops.commonFile`
-- `cloud.sops.hostFile host`
-- `cloud.sops.defaultFile host`
-- `cloud.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`
-- `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`
+- `snowveil.sops.commonFile`
+- `snowveil.sops.hostFile host`
+- `snowveil.sops.defaultFile host`
+- `snowveil.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`
+- `snowveil.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? snowveil.sops.defaultFile host; }`
 
 `secret` 在 common、显式 `host` 或显式 `config` 模式下，传入 `name` 会返回 `{ sops.secrets.<name>.sopsFile = ...; }` 模块片段；省略 `name` 会返回 `{ sopsFile = ...; }`，便于直接赋给已有 secret。省略 `host` 和 `config` 的动态 host 模式始终返回 NixOS module。`sops` helper 不会自动注入模块，也不会合并 common 与 host 文件。
 
@@ -250,15 +250,15 @@ inputs.cloud.lib.version
 ## Source helper
 
 ```nix
-cloud.source.clean {
+snowveil.source.clean {
   root = ./.;
   excludes = [ "secrets" "wallpapers" ];
 }
 
-cloud.projectSource
+snowveil.projectSource
 ```
 
-未绑定的 `inputs.cloud.lib.source.clean` 要求传入 `root`。由 `mkLib`、模块参数和 output 文件获得的绑定 `cloud` 默认使用项目根；`projectSource` 使用默认排除项 `.git`、`.direnv`、`.cnh` 和根级 `result`。
+未绑定的 `inputs.snowveil.lib.source.clean` 要求传入 `root`。由 `mkLib`、模块参数和 output 文件获得的绑定 `snowveil` 默认使用项目根；`projectSource` 使用默认排除项 `.git`、`.direnv`、`.cnh` 和根级 `result`。
 
 ## Output 验证与求值
 

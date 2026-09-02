@@ -3,5 +3,5 @@
   ...
 }:
 {
-  home.sessionVariables.CLOUD_EXAMPLE = config.cloud.example.message;
+  home.sessionVariables.SNOWVEIL_EXAMPLE = config.snowveil.example.message;
 }

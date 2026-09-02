@@ -24,7 +24,7 @@ stdenv.mkDerivation {
 }
 ```
 
-除标准 pkgs 参数外，可按需声明 `inputs`、`self`、`cloud`：
+除标准 pkgs 参数外，可按需声明 `inputs`、`self`、`snowveil`：
 
 ```nix
 { stdenv, inputs, ... }:
@@ -39,7 +39,7 @@ stdenv.mkDerivation {
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
     nixpkgs = {
       config.allowUnfree = true;
@@ -80,7 +80,7 @@ nix fmt
 ## 禁用特定 output
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   outputs.disabled = [
     "packages.some-broken-package"

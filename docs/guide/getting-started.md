@@ -1,11 +1,11 @@
 # 快速开始
 
-Cloud Nix Framework 用「约定代替样板」，让多主机、多用户的 NixOS + home-manager 配置仓库结构清晰、可复用。
+Snowveil 用「约定代替样板」，让多主机、多用户的 NixOS + home-manager 配置仓库结构清晰、可复用。
 
 ## 初始化模板
 
 ```bash
-nix flake init --template github:RhenCloud/Cloud-Nix-Framework
+nix flake init --template github:SnowveilOrg/Snowveil
 ```
 
 ## flake.nix 最小示例
@@ -20,18 +20,18 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    cloud = {
-      url = "github:RhenCloud/Cloud-Nix-Framework";
+    snowveil = {
+      url = "github:SnowveilOrg/Snowveil";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
   };
 
-  outputs = inputs: inputs.cloud.lib.mkFlake { inherit inputs; };
+  outputs = inputs: inputs.snowveil.lib.mkFlake { inherit inputs; };
 }
 ```
 
-入口位于框架 flake 的 `lib` output 下，因此应使用 `inputs.cloud.lib.mkFlake`，而不是 `inputs.cloud.mkFlake`。
+入口位于框架 flake 的 `lib` output 下，因此应使用 `inputs.snowveil.lib.mkFlake`，而不是 `inputs.snowveil.mkFlake`。
 
 仅凭这一段，`hosts/`、`homes/`、`modules/`、`packages/`、`overlays/`、`apps/`、`formatter/`、`deploy/`、`lib/`、`shells/`、`checks/` 下的内容就会被自动解析。
 
@@ -39,7 +39,7 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
 
     nixpkgs = {

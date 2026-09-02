@@ -42,10 +42,10 @@ default.nix          → 始终注入（共享 option）
 
 ## 发现调试
 
-`checks.<system>.cloud-discovery` 是带版本元数据的稳定 JSON 报告：
+`checks.<system>.snowveil-discovery` 是带版本元数据的稳定 JSON 报告：
 
 ```bash
-nix build .#checks.x86_64-linux.cloud-discovery
+nix build .#checks.x86_64-linux.snowveil-discovery
 cat result
 ```
 
@@ -73,7 +73,7 @@ cat result
 
 `schemaVersion` 只在 JSON 结构发生破坏性变化时递增；`discoverySpecVersion` 独立表示目录发现规范。所有集合和图数据以稳定、可复现的顺序输出。
 
-DOT 图由 `checks.<system>.cloud-module-graph-dot` 输出，包含全局图和 `hosts/<host>/<side>.dot`。
+DOT 图由 `checks.<system>.snowveil-module-graph-dot` 输出，包含全局图和 `hosts/<host>/<side>.dot`。
 
 ## 命名冲突
 
@@ -81,4 +81,4 @@ DOT 图由 `checks.<system>.cloud-module-graph-dot` 输出，包含全局图和 
 
 ## 保留名称
 
-`checks/` 下所有以 `cloud-` 开头的名称均由框架保留，包括 discovery、expected、eval 和 DOT 检查。
+`checks/` 下所有以 `snowveil-` 开头的名称均由框架保留，包括 discovery、expected、eval 和 DOT 检查。

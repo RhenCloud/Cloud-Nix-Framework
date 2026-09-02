@@ -19,7 +19,7 @@
 nix run .#hello
 ```
 
-除普通包参数外，函数还可按需声明 `inputs`、`self`、`cloud`。
+除普通包参数外，函数还可按需声明 `inputs`、`self`、`snowveil`。
 
 ## Formatter
 
@@ -58,7 +58,7 @@ formatter 与 packages、checks 等使用同一套 `nixpkgs.config` 和 overlays
 `outputs.disabled` 在调用 output 文件前过滤条目，适合临时关闭损坏或昂贵的 check：
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
 
   outputs.disabled = [
@@ -150,14 +150,14 @@ nix flake check path:. --show-trace
 nix flake check path:. --all-systems --show-trace
 ```
 
-框架会生成标准的 `checks.<system>.cloud-discovery`，记录发现到的 hosts、homes、packages 与模块 output。`checks/` 下的 `cloud-` 前缀由框架保留。
+框架会生成标准的 `checks.<system>.snowveil-discovery`，记录发现到的 hosts、homes、packages 与模块 output。`checks/` 下的 `snowveil-` 前缀由框架保留。
 
 ## 其他 outputs
 
 不适合目录约定的 outputs 可使用 `outputs.extra`：
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   outputs.extra = {
     hydraJobs = { };

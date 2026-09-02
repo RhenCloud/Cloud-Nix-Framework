@@ -1,4 +1,4 @@
-# Cloud Nix Framework
+# Snowveil
 
 基于 Nix Flakes 的声明式配置框架，融合三个优秀项目的设计理念：
 
@@ -26,7 +26,7 @@
 | ---- | ---- | ---- | ---- |
 | 核心库 | `lib/default.nix` | `mkFlake` / `mkSystem` / `mkHome` / `mkLib` | 完成 |
 | 文件系统发现 | `lib/fs.nix` | `importModules` / `flattenTree` | 完成 |
-| Patch helper | `lib/patches.nix` | `cloud.patches.local` / `fromPR` | 完成 |
+| Patch helper | `lib/patches.nix` | `snowveil.patches.local` / `fromPR` | 完成 |
 | Flake 入口 | `flake.nix` | 暴露 `lib` / `templates` / `checks` | 完成 |
 | 模板 | `templates/default/` | `nix flake init --template` | 完成 |
 | 示例 | `examples/` | 可运行的最小示例 | 完成 |
@@ -38,7 +38,7 @@
 ### 1. 初始化模板
 
 ```bash
-nix flake init --template github:RhenCloud/Cloud-Nix-Framework
+nix flake init --template github:SnowveilOrg/Snowveil
 ```
 
 ### 2. 目录结构
@@ -100,11 +100,11 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
-    cloud.url = "github:RhenCloud/Cloud-Nix-Framework";
-    cloud.inputs.nixpkgs.follows = "nixpkgs";
+    snowveil.url = "github:SnowveilOrg/Snowveil";
+    snowveil.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs: inputs.cloud.lib.mkFlake {
+  outputs = inputs: inputs.snowveil.lib.mkFlake {
     inherit inputs;
   };
 }
@@ -114,14 +114,14 @@ nix flake init --template github:RhenCloud/Cloud-Nix-Framework
 
 ## 核心 API
 
-框架通过 flake 的 `lib` 输出暴露统一命名空间。用户 flake 中应从 `inputs.cloud.lib` 调用，完整入口是 `inputs.cloud.lib.mkFlake`。
+框架通过 flake 的 `lib` 输出暴露统一命名空间。用户 flake 中应从 `inputs.snowveil.lib` 调用，完整入口是 `inputs.snowveil.lib.mkFlake`。
 
 ### `mkFlake`
 
 顶层 outputs 构造器，自动扫描目录并拼接全部 outputs。0.3.0 起推荐按职责使用嵌套命名空间：
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   root = ./.;
   systems = [ "x86_64-linux" "aarch64-linux" ];
@@ -198,10 +198,10 @@ home.useGlobalPkgs = host: host != "nixos-desktop";
 ```nix
 outputs = inputs:
   let
-    cloud = inputs.cloud.lib.mkLib { inherit inputs; };
+    snowveil = inputs.snowveil.lib.mkLib { inherit inputs; };
   in
   {
-    nixosConfigurations.nixos-desktop = cloud.mkSystem {
+    nixosConfigurations.nixos-desktop = snowveil.mkSystem {
       host = "nixos-desktop";
       system = "x86_64-linux"; # 必须声明在 hosts/<host>/meta.nix
       modules = [ ];
@@ -224,10 +224,10 @@ outputs = inputs:
 ```nix
 outputs = inputs:
   let
-    cloud = inputs.cloud.lib.mkLib { inherit inputs; };
+    snowveil = inputs.snowveil.lib.mkLib { inherit inputs; };
   in
   {
-    homeConfigurations."rhencloud@nixos-desktop" = cloud.mkHome {
+    homeConfigurations."rhencloud@nixos-desktop" = snowveil.mkHome {
       user = "rhencloud";
       host = "nixos-desktop";  # null = 全局 home；非 null 时继承对应主机架构
       system = "x86_64-linux"; # 仅全局 home 使用
@@ -245,16 +245,16 @@ outputs = inputs:
 
 ### `mkLib` / 版本 / 自动发现函数 / patch 与 sops helper
 
-- `mkLib { inherit inputs; }` 返回已绑定当前 flake 的 `cloud` 命名空间。
+- `mkLib { inherit inputs; }` 返回已绑定当前 flake 的 `snowveil` 命名空间。
 - `version` 返回 `{ major; minor; patch; pre; string; }`，当前为 `0.5.0-dev`；完整策略见[版本策略](./docs/reference/versioning.md)。
 - `importModules` / `flattenTree` / `groupModules` 是目录自动发现工具函数；`groupModules` 还返回模块 `meta`，自动组合采用字典序兜底的稳定拓扑排序。
-- `cloud.patches.local` / `cloud.patches.fromPR` 提供 patch helper。
-- `cloud.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
-- `cloud.source.clean { root?; excludes?; }` 提供统一源码过滤；绑定命名空间还提供 `cloud.projectSource`。
+- `snowveil.patches.local` / `snowveil.patches.fromPR` 提供 patch helper。
+- `snowveil.sops.commonFile` / `hostFile` / `defaultFile` / `secret` / `mkModule` 提供显式的 sops-nix 接入助手。
+- `snowveil.source.clean { root?; excludes?; }` 提供统一源码过滤；绑定命名空间还提供 `snowveil.projectSource`。
 
 ### 注入的模块参数
 
-所有模块（NixOS、独立 home-manager 与嵌入式 home-manager）均自动获得：`inputs`、`channels`、`self`、`cloud`，以及对应模块系统的原生参数。`nixos.specialArgs` 与 `home.specialArgs` 分别注入对应模块系统；旧的 `extraSpecialArgs` 仍作为两侧共同参数兼容。
+所有模块（NixOS、独立 home-manager 与嵌入式 home-manager）均自动获得：`inputs`、`channels`、`self`、`snowveil`，以及对应模块系统的原生参数。`nixos.specialArgs` 与 `home.specialArgs` 分别注入对应模块系统；旧的 `extraSpecialArgs` 仍作为两侧共同参数兼容。
 
 ### 求值模型
 
@@ -296,9 +296,9 @@ outputs = inputs:
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
-    moduleRegistries = [ inputs.cloudModules.example ];
+    moduleRegistries = [ inputs.snowveilModules.example ];
   };
 ```
 
@@ -326,7 +326,7 @@ outputs = inputs:
 ### 额外模块钩子
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   nixos.modules = [
     ./overrides/shared.nix
@@ -363,7 +363,7 @@ inputs.cloud.lib.mkFlake {
 因此自定义包可以直接依赖 overlay 新增的属性，无需再从 `nixpkgs.legacyPackages` 手动构造另一套包集合：
 
 ```nix
-inputs.cloud.lib.mkFlake {
+inputs.snowveil.lib.mkFlake {
   inherit inputs;
   nixpkgs = {
     config = {
@@ -383,27 +383,27 @@ inputs.cloud.lib.mkFlake {
 - `formatter/default.nix` → `formatter.<system>`，文件应返回 formatter derivation。
 - `deploy/default.nix` → 顶层 `deploy`，可用于 deploy-rs 等部署工具的配置。
 
-`apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`cloud`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`cloud`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `outputs.extra` 补充。
+`apps` 与 `formatter` 使用统一 `pkgs.callPackage`，除包参数外还可按需声明 `inputs`、`self`、`snowveil`。`deploy/default.nix` 可按需声明 `lib`、`inputs`、`self`、`snowveil`。目录不存在时不会生成对应 output；其他特殊 output 仍可通过 `outputs.extra` 补充。
 
 自动发现条目可通过 `outputs.disabled` 或同目录 `meta.nix` 的 `enable` / `systems` 禁用。单架构 package 推荐使用 `packages/<system>/<name>/default.nix`，旧的 `<name>.<system>` 后缀在 package 中继续兼容。hosts 目录已改为 `hosts/<name>/` 格式，system 需在 `meta.nix` 中声明。
 
 ### 开发体验
 
 - **格式化**：本仓库的 `nix fmt` 经顶层 `formatter` 输出调用 treefmt；用户仓库若提供 `formatter/default.nix`，则生成自己的 `formatter.<system>`。
-- **选项文档**：`nix build .#options.<system> -o docs/public/options.json` 导出当前 `cloud.*` 公共选项接口。该 output 不计入 checks。
+- **选项文档**：`nix build .#options.<system> -o docs/public/options.json` 导出当前 `snowveil.*` 公共选项接口。该 output 不计入 checks。
 
 ## 模块写作范式
 
 模块采用**单树 + 文件名分拣**，一个程序只对应一个目录，消除 NixOS 与 home-manager 两棵平行树的重复：
 
-- `default.nix`：**中性模块**，声明该程序共享的 option 接口（`options.cloud.<name>.*`），不引用 `services.*` 或 `programs.*`。
-- `nixos.nix`：NixOS 专属逻辑，读取 `config.cloud.<name>.*` 挂服务。
+- `default.nix`：**中性模块**，声明该程序共享的 option 接口（`options.snowveil.<name>.*`），不引用 `services.*` 或 `programs.*`。
+- `nixos.nix`：NixOS 专属逻辑，读取 `config.snowveil.<name>.*` 挂服务。
 - `home.nix`：home-manager 专属逻辑，读取同一 option 挂 dotfile。
 
 ```nix
 # modules/desktop/hyprland/default.nix
 { config, lib, ... }: {
-  options.cloud.hyprland = {
+  options.snowveil.hyprland = {
     enable = lib.mkEnableOption "Hyprland";
   };
 }
@@ -413,7 +413,7 @@ inputs.cloud.lib.mkFlake {
 # modules/desktop/hyprland/nixos.nix
 { config, ... }: {
   config = {
-    # 依据 config.cloud.hyprland.enable 决定系统级配置
+    # 依据 config.snowveil.hyprland.enable 决定系统级配置
   };
 }
 ```
@@ -422,7 +422,7 @@ inputs.cloud.lib.mkFlake {
 # modules/desktop/hyprland/home.nix
 { config, ... }: {
   config = {
-    # 依据相同 config.cloud.hyprland.enable 决定用户级配置
+    # 依据相同 config.snowveil.hyprland.enable 决定用户级配置
   };
 }
 ```
@@ -431,7 +431,7 @@ inputs.cloud.lib.mkFlake {
 
 ### 主机与用户关联（自动推导）
 
-主机与 home 的关联由目录结构推导，无需在 host 模块里手写 `config.cloud.users`：
+主机与 home 的关联由目录结构推导，无需在 host 模块里手写 `config.snowveil.users`：
 
 - `homes/<user>/default.nix` 是共享 home，同时生成 `homeConfigurations.<user>`。
 - `homes/<user>/<host>.nix` 生成 `homeConfigurations."<user>@<host>"`，并将用户关联到对应主机。
@@ -456,19 +456,19 @@ home.embed = {
 };
 ```
 
-`home.useGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`cloud.users` 由框架写入推导结果，模块可读取但不应手动赋值。
+`home.useGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`snowveil.users` 由框架写入推导结果，模块可读取但不应手动赋值。
 
 ## Overlays 与打补丁
 
-框架在 `cloud` 命名空间提供 `patches` helper，简化对 nixpkgs / flake inputs 包打补丁的样板；patch 逻辑仍写在 `overlays/<name>/default.nix`。自动发现的 overlay 不仅作为 `overlays.<name>` 暴露，也会进入 NixOS、独立/嵌入式 home-manager 以及所有 per-system outputs 使用的统一包集合：
+框架在 `snowveil` 命名空间提供 `patches` helper，简化对 nixpkgs / flake inputs 包打补丁的样板；patch 逻辑仍写在 `overlays/<name>/default.nix`。自动发现的 overlay 不仅作为 `overlays.<name>` 暴露，也会进入 NixOS、独立/嵌入式 home-manager 以及所有 per-system outputs 使用的统一包集合：
 
 ```nix
 # overlays/foo/default.nix
-{ cloud }: final: prev: {
+{ snowveil }: final: prev: {
   foo = prev.foo.overrideAttrs (oa: {
     patches = (oa.patches or []) ++ [
-      (cloud.patches.local ./fix.patch)          # 本地 patch
-      (cloud.patches.fromPR {                    # GitHub PR patch
+      (snowveil.patches.local ./fix.patch)          # 本地 patch
+      (snowveil.patches.fromPR {                    # GitHub PR patch
         inherit (prev) fetchpatch;
         owner = "NixOS";
         repo = "nixpkgs";
@@ -480,8 +480,8 @@ home.embed = {
 }
 ```
 
-- `cloud.patches.local path`：本地 `.patch` 文件，路径透传。
-- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：拼接 `https://github.com/<owner>/<repo>/pull/<pr>.patch` 并用 `fetchpatch` 拉取。`hash` 必须固定以保证可复现，开发期可置 `null` 触发报错回填。
+- `snowveil.patches.local path`：本地 `.patch` 文件，路径透传。
+- `snowveil.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：拼接 `https://github.com/<owner>/<repo>/pull/<pr>.patch` 并用 `fetchpatch` 拉取。`hash` 必须固定以保证可复现，开发期可置 `null` 触发报错回填。
 
 多版本包需求（如锁定某个包的旧版本）不通过多 nixpkgs channel 实现，而是可选集成 [nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse)：
 
@@ -506,10 +506,10 @@ home.embed = {
 # sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
 # hosts/nixos-desktop/default.nix
-{ cloud, inputs, ... }:
+{ snowveil, inputs, ... }:
 {
   imports = [
-    (cloud.sops.mkModule {
+    (snowveil.sops.mkModule {
       sopsNixModule = inputs.sops-nix.nixosModules.sops;
       host = "nixos-desktop";
     })
@@ -519,21 +519,21 @@ home.embed = {
 
 可用接口：
 
-- `cloud.sops.commonFile`；
-- `cloud.sops.hostFile host`；
-- `cloud.sops.defaultFile host`；
-- `cloud.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`；
-- `cloud.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? cloud.sops.defaultFile host; }`。
+- `snowveil.sops.commonFile`；
+- `snowveil.sops.hostFile host`；
+- `snowveil.sops.defaultFile host`；
+- `snowveil.sops.secret { source = "common" | "host"; host ? null; config ? null; name ? null; }`；
+- `snowveil.sops.mkModule { sopsNixModule; host ? null; defaultSopsFile ? snowveil.sops.defaultFile host; }`。
 
 传入 `name` 时，helper 直接返回可导入的模块片段：
 
 ```nix
 imports = [
-  (cloud.sops.secret {
+  (snowveil.sops.secret {
     source = "common";
     name = "password-hash";
   })
-  (cloud.sops.secret {
+  (snowveil.sops.secret {
     source = "host";
     host = "nixos-desktop";
     name = "mihomo-proxies";
@@ -544,7 +544,7 @@ imports = [
 省略 `name` 时返回单个 secret 的 option 属性集，也可直接赋值：
 
 ```nix
-sops.secrets.password-hash = cloud.sops.secret { source = "common"; };
+sops.secrets.password-hash = snowveil.sops.secret { source = "common"; };
 ```
 
 `secret` 只减少路径样板，不会合并 YAML。需要自定义位置时显式传入 `defaultSopsFile` 或逐个设置 `sopsFile`。
@@ -565,7 +565,7 @@ home-manager switch --flake .#rhencloud@nixos-desktop
 nix flake check path:. --show-trace
 ```
 
-框架默认生成 `checks.<system>.cloud-discovery` JSON 报告和 `cloud-module-graph-dot` 图输出；可通过 `outputs.eval` 启用 `cloud-eval-hosts` / `cloud-eval-homes`，通过 `outputs.diagnostics` 关闭不需要的诊断。所有 `cloud-*` check 名称由框架保留。
+框架默认生成 `checks.<system>.snowveil-discovery` JSON 报告和 `snowveil-module-graph-dot` 图输出；可通过 `outputs.eval` 启用 `snowveil-eval-hosts` / `snowveil-eval-homes`，通过 `outputs.diagnostics` 关闭不需要的诊断。所有 `snowveil-*` check 名称由框架保留。
 
 `mkFlake` 在同一次调用内按 system 复用同一个 `pkgs`，并缓存发现索引、主机模块选择和依赖解析结果。测量无 eval cache 的性能时可运行：
 
@@ -577,7 +577,7 @@ RUNS=3 ./scripts/benchmark-eval.sh path:. checks.x86_64-linux.newfeatures.drvPat
 
 ## 与其他框架对比
 
-| | Cloud Nix Framework | snowfallorg/lib | flake-fhs | flake.parts | nixos-unified | den |
+| | Snowveil | snowfallorg/lib | flake-fhs | flake.parts | nixos-unified | den |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | 定位 | 约定式配置框架 | 统一配置库 | 目录映射 outputs | 通用 flake 模块系统 | 三平台统一配置模块 | 面向切面、功能优先 |
 | 组织方式 | 目录约定 + 单树分拣 | 目录约定 + 分类 | 目录树即 flake | flake 模块系统 | flake-parts 模块 + autowiring | aspect 函数 + policy |

@@ -1,6 +1,6 @@
-# Cloud CLI 实施计划（A 分支）
+# Snowveil CLI 实施计划（A 分支）
 
-> 状态：待实施（计划先行）。本工具为**独立 Rust 仓库**，不落入 Cloud Nix Framework 本体。
+> 状态：待实施（计划先行）。本工具为**独立 Rust 仓库**，不落入 Snowveil 本体。
 
 ## 定位
 

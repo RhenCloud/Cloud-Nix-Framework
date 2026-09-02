@@ -1,6 +1,6 @@
 {
   "nodes": {
-    "cloud": {
+    "snowveil": {
       "inputs": {
         "home-manager": [
           "home-manager"
@@ -58,7 +58,7 @@
     },
     "root": {
       "inputs": {
-        "cloud": "cloud",
+        "snowveil": "snowveil",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs"
       }

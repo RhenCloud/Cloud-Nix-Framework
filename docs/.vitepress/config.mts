@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Cloud Nix Framework',
+  title: 'Snowveil',
   description: '基于 Nix Flakes 的配置框架',
   cleanUrls: true,
   lastUpdated: '最后更新于',
@@ -95,10 +95,10 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/RhenCloud/Cloud-Nix-Framework' },
+      { icon: 'github', link: 'https://github.com/SnowveilOrg/Snowveil' },
     ],
     editLink: {
-      pattern: 'https://github.com/RhenCloud/Cloud-Nix-Framework/edit/main/docs/:path',
+      pattern: 'https://github.com/SnowveilOrg/Snowveil/edit/main/docs/:path',
       text: '编辑此页',
     },
     search: { provider: 'local' },

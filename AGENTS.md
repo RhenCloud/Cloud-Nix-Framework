@@ -1,20 +1,20 @@
 # AGENTS.md
 
-面向 AI 编码代理（及贡献者）的框架自身开发约定。此仓库是 **Cloud Nix Framework** 的库本体，不是用户配置仓库。
+面向 AI 编码代理（及贡献者）的框架自身开发约定。此仓库是 **Snowveil** 的库本体，不是用户配置仓库。
 
 ## 项目概述
 
-Cloud Nix Framework 是一个基于 Nix Flakes 的配置框架，用「目录约定 + 自动发现」替代样板代码，聚焦 NixOS + home-manager 双对象配置。设计理念调和自 flake.parts（模块化）、snowfallorg/lib（统一配置/分类发现）、flake-fhs（目录即 flake）。框架自身**零 flake-utils / flake.parts 运行时依赖**，纯 `nixpkgs.lib` 实现。
+Snowveil 是一个基于 Nix Flakes 的配置框架，用「目录约定 + 自动发现」替代样板代码，聚焦 NixOS + home-manager 双对象配置。设计理念调和自 flake.parts（模块化）、snowfallorg/lib（统一配置/分类发现）、flake-fhs（目录即 flake）。框架自身**零 flake-utils / flake.parts 运行时依赖**，纯 `nixpkgs.lib` 实现。
 
 ## 仓库结构
 
 ```
 .
 ├── flake.nix                 # 入口：暴露 lib / templates / checks
-├── lib/                      # 框架库源码（cloud 命名空间）
+├── lib/                      # 框架库源码（snowveil 命名空间）
 │   ├── default.nix           #   mkFlake / mkSystem / mkHome / mkLib ...
 │   ├── fs.nix                #   文件系统树遍历（自动发现）
-│   └── patches.nix           #   cloud.patches.local / fromPR
+│   └── patches.nix           #   snowveil.patches.local / fromPR
 ├── templates/                # flake 模板（nix flake init --template）
 │   └── default/
 ├── examples/                 # 可运行的最小示例
@@ -50,21 +50,21 @@ Cloud Nix Framework 是一个基于 Nix Flakes 的配置框架，用「目录约
 
 ## 核心 API 契约
 
-框架对外暴露的命名空间为 `cloud`，这是公共接口，**不允许破坏性变更**（改动需在 README「核心 API」章节同步）：
+框架对外暴露的命名空间为 `snowveil`，这是公共接口，**不允许破坏性变更**（改动需在 README「核心 API」章节同步）：
 
 - `mkFlake { inherit inputs; systems ? [ ... ]; extraOutputs ? { }; extraSpecialArgs ? { }; }` → 顶层 outputs 构造器
 - `mkSystem { host; system ? null; modules ? []; extraSpecialArgs ? {}; }` → `nixosConfigurations.<host>`
 - `mkHome { user; host ? null; system ? null; modules ? []; extraSpecialArgs ? {}; }` → `homeConfigurations.<user>` 或 `"<user>@<host>"`
-- `mkLib { inherit inputs; }` → 返回 `cloud` 命名空间
+- `mkLib { inherit inputs; }` → 返回 `snowveil` 命名空间
 - `importModules` / `flattenTree` / `groupModules` → 目录自动发现工具函数
-- `cloud.patches.local` / `cloud.patches.fromPR` → patch helper
+- `snowveil.patches.local` / `snowveil.patches.fromPR` → patch helper
 
 新增公共函数时，须在 `lib/default.nix` 导出，并在 README「核心 API」章节补充说明。
 
 ## 目录自动发现规则
 
 - `hosts/` 主机目录**必须**带 `.<system>` 后缀（`hosts/<name>.<system>/default.nix`），不猜测默认架构；key 为去后缀的 `<name>`。
-- `homes/<user>/<host>.nix` 声明该 home 关联到某主机（自动推导 `nixosConfigurations.<host>` 的 `cloud.users`，无需在 host 中手写）；`homes/<user>/default.nix` 为用户共享 home。
+- `homes/<user>/<host>.nix` 声明该 home 关联到某主机（自动推导 `nixosConfigurations.<host>` 的 `snowveil.users`，无需在 host 中手写）；`homes/<user>/default.nix` 为用户共享 home。
 - `modules/` 单树递归收集四个 magic 文件：`options.nix`（接口声明，始终注入）、`default.nix`（中性共享实现）、`nixos.nix`（NixOS 专属实现）、`home.nix`（home-manager 专属实现）。
   - NixOS side load order：`options.nix` → `default.nix` → `nixos.nix`
   - home-manager side load order：`options.nix` → `default.nix` → `home.nix`
@@ -76,7 +76,7 @@ Cloud Nix Framework 是一个基于 Nix Flakes 的配置框架，用「目录约
 ## 模块/示例/模板约定
 
 - 用户模块按目录自动发现：放 `modules/`。模块结构遵循分层约定：
-  - `options.nix`（可选但推荐）：声明 `options.cloud.<name>.*` 接口，始终在两侧注入
+  - `options.nix`（可选但推荐）：声明 `options.snowveil.<name>.*` 接口，始终在两侧注入
   - `default.nix`（可选）：中性实现，两侧都会使用
   - `nixos.nix`（可选）：NixOS 专属实现
   - `home.nix`（可选）：home-manager 专属实现

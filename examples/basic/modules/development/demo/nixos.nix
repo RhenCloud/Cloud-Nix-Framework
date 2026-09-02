@@ -1,3 +1,3 @@
 _: {
-  environment.variables.CLOUD_DEVELOPMENT = "1";
+  environment.variables.SNOWVEIL_DEVELOPMENT = "1";
 }

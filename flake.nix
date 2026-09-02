@@ -1,5 +1,5 @@
 {
-  description = "Cloud Nix Framework：基于 Nix Flakes 的配置框架";
+  description = "Snowveil：基于 Nix Flakes 的配置框架";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -17,17 +17,17 @@
     }:
     let
       inherit (nixpkgs) lib;
-      cloud = import ./lib { inherit lib; };
+      snowveil = import ./lib { inherit lib; };
       dependencyGraph = import ./lib/internal/depgraph.nix { inherit lib; };
       frameworkInputs = {
         inherit self nixpkgs home-manager;
       };
-      bound = cloud.mkLib { inputs = frameworkInputs; };
+      bound = snowveil.mkLib { inputs = frameworkInputs; };
 
       templates = {
         default = {
           path = ./templates/default;
-          description = "Cloud Nix Framework 最小可用模板";
+          description = "Snowveil 最小可用模板";
         };
       };
 
@@ -37,70 +37,70 @@
           outPath = ./examples/basic;
         };
       };
-      exampleBound = cloud.mkLib { inputs = exampleInputs; };
-      exampleFlake = cloud.mkFlake {
+      exampleBound = snowveil.mkLib { inputs = exampleInputs; };
+      exampleFlake = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         nixos.specialArgs = {
-          cloudTestArg = "injected";
-          cloudNixosOnly = "nixos-only";
+          snowveilTestArg = "injected";
+          snowveilNixosOnly = "nixos-only";
         };
         home.specialArgs = {
-          cloudTestArg = "injected";
-          cloudHomeOnly = "home-only";
+          snowveilTestArg = "injected";
+          snowveilHomeOnly = "home-only";
         };
         nixpkgs.config.allowUnfree = true;
         nixpkgs.overlays = [
           (final: _: {
-            cloud-extra-marker = final.writeText "cloud-extra-marker" "ok";
+            snowveil-extra-marker = final.writeText "snowveil-extra-marker" "ok";
           })
         ];
         nixos.modules = [
           (
             args@{
-              cloudNixosOnly,
+              snowveilNixosOnly,
               ...
             }:
             {
               assertions = [
                 {
-                  assertion = !(args ? cloudHomeOnly);
+                  assertion = !(args ? snowveilHomeOnly);
                   message = "home.specialArgs 泄漏到了 NixOS module";
                 }
               ];
-              environment.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG = cloudNixosOnly;
+              environment.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG = snowveilNixosOnly;
             }
           )
         ];
         home.modules = [
           (
             args@{
-              cloudHomeOnly,
-              cloudTestArg,
+              snowveilHomeOnly,
+              snowveilTestArg,
               pkgs,
               ...
             }:
             {
               home.sessionVariables = {
-                CLOUD_SPECIAL_ARG = cloudTestArg;
-                CLOUD_HOME_SPECIAL_ARG = cloudHomeOnly;
-                CLOUD_NIXOS_SPECIAL_ARG_LEAK = if args ? cloudNixosOnly then "yes" else "no";
-                CLOUD_DISCOVERED_OVERLAY = if pkgs ? cloud-example then "yes" else "no";
-                CLOUD_EXTRA_OVERLAY = if pkgs ? cloud-extra-marker then "yes" else "no";
-                CLOUD_ALLOW_UNFREE = if pkgs.config.allowUnfree then "yes" else "no";
+                SNOWVEIL_SPECIAL_ARG = snowveilTestArg;
+                SNOWVEIL_HOME_SPECIAL_ARG = snowveilHomeOnly;
+                SNOWVEIL_NIXOS_SPECIAL_ARG_LEAK = if args ? snowveilNixosOnly then "yes" else "no";
+                SNOWVEIL_DISCOVERED_OVERLAY = if pkgs ? snowveil-example then "yes" else "no";
+                SNOWVEIL_EXTRA_OVERLAY = if pkgs ? snowveil-extra-marker then "yes" else "no";
+                SNOWVEIL_ALLOW_UNFREE = if pkgs.config.allowUnfree then "yes" else "no";
               };
             }
           )
         ];
       };
       # 故意保留扁平参数，验证弃用兼容路径仍然可用
-      exampleFlakeNoEmbed = cloud.mkFlake {
+      exampleFlakeNoEmbed = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         embedHomeManager = false;
       };
 
-      exampleFlakeHostPolicy = cloud.mkFlake {
+      exampleFlakeHostPolicy = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         home.embed = {
@@ -108,7 +108,7 @@
           hosts.nixos-desktop = false;
         };
       };
-      exampleFlakeDisabled = cloud.mkFlake {
+      exampleFlakeDisabled = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         outputs.disabled = [
@@ -120,13 +120,13 @@
         ];
       };
 
-      exampleFlakeAarch64Only = cloud.mkFlake {
+      exampleFlakeAarch64Only = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         systems = [ "aarch64-linux" ];
       };
 
-      exampleFlakeSelective = cloud.mkFlake {
+      exampleFlakeSelective = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         systems = [ "x86_64-linux" ];
@@ -143,7 +143,7 @@
         };
       };
 
-      exampleFlakeNoDiagnostics = cloud.mkFlake {
+      exampleFlakeNoDiagnostics = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         systems = [ "x86_64-linux" ];
@@ -157,7 +157,7 @@
       invalidOutputCheck =
         outputs:
         let
-          result = cloud.mkFlake {
+          result = snowveil.mkFlake {
             inputs = exampleInputs;
             root = ./examples/basic;
             systems = [ "x86_64-linux" ];
@@ -178,7 +178,7 @@
         };
       };
 
-      exampleFlakeValidated = cloud.mkFlake {
+      exampleFlakeValidated = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
         systems = [ "x86_64-linux" ];
@@ -494,8 +494,8 @@
           exampleDottedPkg = exampleFlake.packages.${sys}."dotted.x86_64-linux";
           exampleSystemLayoutPkg = exampleFlake.packages.x86_64-linux.system-layout;
           exampleDiscoveredCheck = exampleFlake.checks.${sys}.example;
-          exampleDiscoveryReport = exampleFlake.checks.${sys}.cloud-discovery;
-          exampleDotGraph = exampleFlake.checks.${sys}.cloud-module-graph-dot;
+          exampleDiscoveryReport = exampleFlake.checks.${sys}.snowveil-discovery;
+          exampleDotGraph = exampleFlake.checks.${sys}.snowveil-module-graph-dot;
           validatedChecks = exampleFlakeValidated.checks.x86_64-linux;
           selectiveChecks = exampleFlakeSelective.checks.x86_64-linux;
           noDiagnosticChecks = exampleFlakeNoDiagnostics.checks.x86_64-linux;
@@ -541,41 +541,41 @@
               outPath = ./examples/basic;
             };
             inherit nixpkgs home-manager;
-            cloud = self;
+            snowveil = self;
           };
         in
         {
-          surface = pkgs.runCommand "cloud-surface" { } ''
-            printf '%s\n' "${builtins.concatStringsSep " " (builtins.attrNames cloud)}" > "$out"
+          surface = pkgs.runCommand "snowveil-surface" { } ''
+            printf '%s\n' "${builtins.concatStringsSep " " (builtins.attrNames snowveil)}" > "$out"
           '';
-          host = pkgs.runCommand "cloud-host" { } ''
-            test "${exampleHost.config.environment.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG}" = "nixos-only"
-            printf '%s\n' "${toString exampleHost.config.cloud.users}" > "$out"
+          host = pkgs.runCommand "snowveil-host" { } ''
+            test "${exampleHost.config.environment.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG}" = "nixos-only"
+            printf '%s\n' "${toString exampleHost.config.snowveil.users}" > "$out"
           '';
-          home = pkgs.runCommand "cloud-home" { } ''
+          home = pkgs.runCommand "snowveil-home" { } ''
             printf '%s\n' "${exampleHome.config.home.username}" > "$out"
           '';
-          homeGlobal = pkgs.runCommand "cloud-home-global" { } ''
+          homeGlobal = pkgs.runCommand "snowveil-home-global" { } ''
             printf '%s\n' "${exampleHomeGlobal.config.home.username}" > "$out"
           '';
-          homeEmbedded = pkgs.runCommand "cloud-home-embedded" { } ''
+          homeEmbedded = pkgs.runCommand "snowveil-home-embedded" { } ''
             test "${exampleEmbeddedHome.home.username}" = "rhencloud"
-            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_SPECIAL_ARG}" = "injected"
-            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_HOME_SPECIAL_ARG}" = "home-only"
-            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG_LEAK}" = "no"
-            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
-            test "${exampleEmbeddedHome.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
+            test "${exampleEmbeddedHome.home.sessionVariables.SNOWVEIL_SPECIAL_ARG}" = "injected"
+            test "${exampleEmbeddedHome.home.sessionVariables.SNOWVEIL_HOME_SPECIAL_ARG}" = "home-only"
+            test "${exampleEmbeddedHome.home.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG_LEAK}" = "no"
+            test "${exampleEmbeddedHome.home.sessionVariables.SNOWVEIL_DISCOVERED_OVERLAY}" = "yes"
+            test "${exampleEmbeddedHome.home.sessionVariables.SNOWVEIL_EXTRA_OVERLAY}" = "yes"
             printf '%s\n' "${exampleEmbeddedHome.home.username}" > "$out"
           '';
-          homeStandalonePkgs = pkgs.runCommand "cloud-home-standalone-pkgs" { } ''
-            test "${exampleHome.config.home.sessionVariables.CLOUD_HOME_SPECIAL_ARG}" = "home-only"
-            test "${exampleHome.config.home.sessionVariables.CLOUD_NIXOS_SPECIAL_ARG_LEAK}" = "no"
-            test "${exampleHome.config.home.sessionVariables.CLOUD_DISCOVERED_OVERLAY}" = "yes"
-            test "${exampleHome.config.home.sessionVariables.CLOUD_EXTRA_OVERLAY}" = "yes"
-            test "${exampleHome.config.home.sessionVariables.CLOUD_ALLOW_UNFREE}" = "yes"
+          homeStandalonePkgs = pkgs.runCommand "snowveil-home-standalone-pkgs" { } ''
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_HOME_SPECIAL_ARG}" = "home-only"
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG_LEAK}" = "no"
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_DISCOVERED_OVERLAY}" = "yes"
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_EXTRA_OVERLAY}" = "yes"
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_ALLOW_UNFREE}" = "yes"
             printf '%s\n' "${exampleHome.config.home.username}" > "$out"
           '';
-          homeNoEmbed = pkgs.runCommand "cloud-home-no-embed" { } ''
+          homeNoEmbed = pkgs.runCommand "snowveil-home-no-embed" { } ''
             if [ "${
               if builtins.hasAttr "home-manager" exampleNoEmbedHost.options then "yes" else "no"
             }" = "yes" ]; then
@@ -584,7 +584,7 @@
             fi
             printf '%s\n' "${exampleNoEmbedHome.config.home.username}" > "$out"
           '';
-          homeHostPolicies = pkgs.runCommand "cloud-home-host-policies" { } ''
+          homeHostPolicies = pkgs.runCommand "snowveil-home-host-policies" { } ''
             test "${if exampleHost.config.home-manager.useGlobalPkgs then "yes" else "no"}" = "no"
             if [ "${
               if builtins.hasAttr "home-manager" exampleStandaloneHost.options then "yes" else "no"
@@ -598,14 +598,14 @@
               echo "per-host home.embed 策略未生效" >&2
               exit 1
             fi
-            test "${exampleStandaloneHome.config.home.sessionVariables.CLOUD_STANDALONE}" = "1"
+            test "${exampleStandaloneHome.config.home.sessionVariables.SNOWVEIL_STANDALONE}" = "1"
             printf '%s\n' "${exampleStandaloneHome.config.home.username}" > "$out"
           '';
-          package = pkgs.runCommand "cloud-package" { } ''
+          package = pkgs.runCommand "snowveil-package" { } ''
             test "$(cat ${exampleOverlayPkg})" = "overlay-ok"
             printf '%s\n' "${examplePkg.name}" > "$out"
           '';
-          outputcontrol = pkgs.runCommand "cloud-output-control" { } ''
+          outputcontrol = pkgs.runCommand "snowveil-output-control" { } ''
             test "${if lib.isDerivation exampleDottedPkg then "yes" else "no"}" = "yes"
             test "${if lib.isDerivation exampleDiscoveredCheck then "yes" else "no"}" = "yes"
             if [ "${
@@ -678,19 +678,19 @@
             fi
             printf '%s\n' "${exampleDottedPkg.name}" > "$out"
           '';
-          overlay = pkgs.runCommand "cloud-overlay" { } ''
+          overlay = pkgs.runCommand "snowveil-overlay" { } ''
             printf '%s\n' "${if builtins.isFunction exampleOverlay then "ok" else "bad"}" > "$out"
           '';
-          devshell = pkgs.runCommand "cloud-devshell" { } ''
+          devshell = pkgs.runCommand "snowveil-devshell" { } ''
             printf '%s\n' "${if exampleDevshell ? name then "ok" else "bad"}" > "$out"
           '';
-          userlib = pkgs.runCommand "cloud-userlib" { } ''
+          userlib = pkgs.runCommand "snowveil-userlib" { } ''
             printf '%s\n' "${exampleLib "hi"}" > "$out"
           '';
-          images = pkgs.runCommand "cloud-images" { } ''
+          images = pkgs.runCommand "snowveil-images" { } ''
             printf '%s\n' "${toString (builtins.attrNames exampleFlake.images)}" > "$out"
           '';
-          modulegraph = pkgs.runCommand "cloud-module-graph" { nativeBuildInputs = [ pkgs.jq ]; } ''
+          modulegraph = pkgs.runCommand "snowveil-module-graph" { nativeBuildInputs = [ pkgs.jq ]; } ''
             report=${exampleDiscoveryReport}
             ${pkgs.jq}/bin/jq -e '
               (.moduleGraph.nixos.order | index("development.demo"))
@@ -721,31 +721,31 @@
             fi
             cp "$report" "$out"
           '';
-          rolefilter = pkgs.runCommand "cloud-rolefilter" { } ''
+          rolefilter = pkgs.runCommand "snowveil-rolefilter" { } ''
 
-            if [ -n "${exampleHost.config.environment.variables.CLOUD_SERVER or ""}" ]; then
+            if [ -n "${exampleHost.config.environment.variables.SNOWVEIL_SERVER or ""}" ]; then
               echo "server 角色模块应被过滤掉，但未" >&2
               exit 1
             fi
-            if [ -z "${exampleHost.config.environment.variables.CLOUD_COMMON or ""}" ]; then
+            if [ -z "${exampleHost.config.environment.variables.SNOWVEIL_COMMON or ""}" ]; then
               echo "_common 共享模块应始终注入，但未" >&2
               exit 1
             fi
-            if [ -z "${exampleHost.config.environment.variables.CLOUD_DEVELOPMENT or ""}" ]; then
+            if [ -z "${exampleHost.config.environment.variables.SNOWVEIL_DEVELOPMENT or ""}" ]; then
               echo "development 组合角色模块应注入，但未" >&2
               exit 1
             fi
-            test "${exampleHost.config.environment.variables.CLOUD_HOST_CONFIG_ARG}" = "nixos-desktop"
-            printf '%s\n' "${exampleHost.config.environment.variables.CLOUD_EXAMPLE}" > "$out"
+            test "${exampleHost.config.environment.variables.SNOWVEIL_HOST_CONFIG_ARG}" = "nixos-desktop"
+            printf '%s\n' "${exampleHost.config.environment.variables.SNOWVEIL_EXAMPLE}" > "$out"
           '';
-          extensions = pkgs.runCommand "cloud-extensions" { } ''
+          extensions = pkgs.runCommand "snowveil-extensions" { } ''
             test "${exampleApp.type}" = "app"
             test -n "${exampleApp.program}"
             test "${if lib.isDerivation exampleFormatter then "yes" else "no"}" = "yes"
             test "${exampleDeploy.root}" = "${toString ./examples/basic}"
             printf '%s\n' "${exampleApp.program}" > "$out"
           '';
-          moduleoutputs = pkgs.runCommand "cloud-module-outputs" { } ''
+          moduleoutputs = pkgs.runCommand "snowveil-module-outputs" { } ''
             names="${builtins.concatStringsSep " " (builtins.attrNames exampleFlake.nixosModules)}"
             case " $names " in
               *" desktop.example "*) ;;
@@ -757,33 +757,33 @@
             esac
             printf '%s\n' "$names" > "$out"
           '';
-          newfeatures = pkgs.runCommand "cloud-new-features" { } ''
-            test -e ${validatedChecks.cloud-discovery-expected-hosts}
-            test -e ${validatedChecks.cloud-discovery-expected-packages}
-            test -e ${validatedChecks.cloud-discovery-expected-deploy}
-            test -e ${validatedChecks.cloud-eval-hosts}
-            test -e ${validatedChecks.cloud-eval-homes}
+          newfeatures = pkgs.runCommand "snowveil-new-features" { } ''
+            test -e ${validatedChecks.snowveil-discovery-expected-hosts}
+            test -e ${validatedChecks.snowveil-discovery-expected-packages}
+            test -e ${validatedChecks.snowveil-discovery-expected-deploy}
+            test -e ${validatedChecks.snowveil-eval-hosts}
+            test -e ${validatedChecks.snowveil-eval-homes}
             test -e ${exampleDotGraph}/nixos.dot
             test -e ${exampleDotGraph}/hosts/nixos-desktop/home.dot
             test ! -e ${cleanedSource}/docs
             test -e ${cleanedSource}/lib/default.nix
             printf '%s\n' ok > "$out"
           '';
-          evalcontrols = pkgs.runCommand "cloud-eval-controls" { nativeBuildInputs = [ pkgs.jq ]; } ''
-            ${pkgs.jq}/bin/jq -e 'map(.name) == ["hm-standalone"]' ${selectiveChecks.cloud-eval-hosts} >/dev/null
-            ${pkgs.jq}/bin/jq -e 'map(.name) == ["rhencloud@hm-standalone"]' ${selectiveChecks.cloud-eval-homes} >/dev/null
-            test -e ${selectiveChecks.cloud-module-graph-dot}/nixos.dot
-            test ! -e ${selectiveChecks.cloud-module-graph-dot}/hosts
-            test "${if builtins.hasAttr "cloud-discovery" selectiveChecks then "yes" else "no"}" = "no"
+          evalcontrols = pkgs.runCommand "snowveil-eval-controls" { nativeBuildInputs = [ pkgs.jq ]; } ''
+            ${pkgs.jq}/bin/jq -e 'map(.name) == ["hm-standalone"]' ${selectiveChecks.snowveil-eval-hosts} >/dev/null
+            ${pkgs.jq}/bin/jq -e 'map(.name) == ["rhencloud@hm-standalone"]' ${selectiveChecks.snowveil-eval-homes} >/dev/null
+            test -e ${selectiveChecks.snowveil-module-graph-dot}/nixos.dot
+            test ! -e ${selectiveChecks.snowveil-module-graph-dot}/hosts
+            test "${if builtins.hasAttr "snowveil-discovery" selectiveChecks then "yes" else "no"}" = "no"
             test "${
-              if builtins.hasAttr "cloud-module-graph-dot" noDiagnosticChecks then "yes" else "no"
+              if builtins.hasAttr "snowveil-module-graph-dot" noDiagnosticChecks then "yes" else "no"
             }" = "no"
             test "${
               if lib.all (result: !result.success) (builtins.attrValues invalidOutputChecks) then "yes" else "no"
             }" = "yes"
             printf '%s\n' ok > "$out"
           '';
-          sops = pkgs.runCommand "cloud-sops" { } ''
+          sops = pkgs.runCommand "snowveil-sops" { } ''
             test "${exampleSopsModule.sops.defaultSopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             test "${exampleSopsCommon.sopsFile}" = "${toString ./examples/basic}/secrets/common.yaml"
             test "${exampleSopsHost.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
@@ -792,9 +792,9 @@
             test "${exampleSopsConfig.sopsFile}" = "${toString ./examples/basic}/secrets/hosts/nixos-desktop.yaml"
             printf '%s\n' "${exampleSopsModule.sops.defaultSopsFile}" > "$out"
           '';
-          examplereal = pkgs.runCommand "cloud-example-real" { } ''
+          examplereal = pkgs.runCommand "snowveil-example-real" { } ''
             if [ -z "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" ]; then
-              echo "examples/basic 入口错误：未生成 nixosConfigurations（应为 inputs.cloud.lib.mkFlake）" >&2
+              echo "examples/basic 入口错误：未生成 nixosConfigurations（应为 inputs.snowveil.lib.mkFlake）" >&2
               exit 1
             fi
             printf '%s\n' "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" > "$out"
@@ -846,14 +846,14 @@
         sys:
         let
           pkgs = nixpkgs.legacyPackages.${sys};
-          cloudOpts = exampleFlake.nixosConfigurations.nixos-desktop.options.cloud;
+          snowveilOpts = exampleFlake.nixosConfigurations.nixos-desktop.options.snowveil;
         in
-        pkgs.writeText "cloud-options.json" (builtins.toJSON (cloud.renderOptions cloudOpts))
+        pkgs.writeText "snowveil-options.json" (builtins.toJSON (snowveil.renderOptions snowveilOpts))
       );
     in
     {
-      lib = cloud // {
-        cloud = bound;
+      lib = snowveil // {
+        snowveil = bound;
         inherit templates checks options;
       };
       inherit

@@ -94,7 +94,7 @@ nixos-rebuild switch --flake .#nixos-desktop
 nix flake check path:. --show-trace
 
 # 查看发现到的主机
-nix build .#checks.x86_64-linux.cloud-discovery && cat result
+nix build .#checks.x86_64-linux.snowveil-discovery && cat result
 ```
 
 ## FQDN 主机名

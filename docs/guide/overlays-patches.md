@@ -21,15 +21,15 @@ final: prev: {
 }
 ```
 
-**带框架参数的扩展签名**（第一个参数接收 `{ inputs, self, cloud }`）：
+**带框架参数的扩展签名**（第一个参数接收 `{ inputs, self, snowveil }`）：
 
 ```nix
 # overlays/foo/default.nix
 extras: final: prev: {
   foo = prev.foo.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
-      (extras.cloud.patches.local ./fix.patch)
-      (extras.cloud.patches.fromCommit {
+      (extras.snowveil.patches.local ./fix.patch)
+      (extras.snowveil.patches.fromCommit {
         inherit (prev) fetchpatch;
         owner = "NixOS";
         repo = "nixpkgs";
@@ -44,18 +44,18 @@ extras: final: prev: {
 也可使用解构参数：
 
 ```nix
-{ cloud, inputs, self }: final: prev: {
+{ snowveil, inputs, self }: final: prev: {
   ...
 }
 ```
 
-框架通过 `functionArgs` 检测解构签名（参数名含 `inputs`、`self` 或 `cloud`）；若检测不到，则尝试以 `{ inherit inputs self cloud; }` 调用，如返回函数则视为扩展签名，否则当作普通 overlay 使用。
+框架通过 `functionArgs` 检测解构签名（参数名含 `inputs`、`self` 或 `snowveil`）；若检测不到，则尝试以 `{ inherit inputs self snowveil; }` 调用，如返回函数则视为扩展签名，否则当作普通 overlay 使用。
 
 ## 统一 nixpkgs 配置
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
 
     nixpkgs = {
@@ -95,13 +95,13 @@ Stylix 的某些模块（`nixos-icons`、`gtksourceview`）会在 HM 侧设置 o
 
 ## Patch helper
 
-- `cloud.patches.local path`：本地 `.patch` 文件，路径透传。
-- `cloud.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }`：固定到具体 commit，可复现性高。推荐用法。
-- `cloud.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：**已弃用**，PR 再次推送后 hash 变化；请改用 `fromCommit`。
+- `snowveil.patches.local path`：本地 `.patch` 文件，路径透传。
+- `snowveil.patches.fromCommit { fetchpatch; owner; repo; rev; hash; }`：固定到具体 commit，可复现性高。推荐用法。
+- `snowveil.patches.fromPR { fetchpatch; owner; repo; pr; hash; }`：**已弃用**，PR 再次推送后 hash 变化；请改用 `fromCommit`。
 
 ```nix
 # 推荐：固定到 commit hash
-cloud.patches.fromCommit {
+snowveil.patches.fromCommit {
   inherit (prev) fetchpatch;
   owner = "NixOS";
   repo = "nixpkgs";

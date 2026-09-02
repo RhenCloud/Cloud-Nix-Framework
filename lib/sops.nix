@@ -22,7 +22,7 @@ rec {
         else if builtins.isString name && name != "" then
           { sops.secrets.${name} = options; }
         else
-          throw "cloud.sops.secret.name 必须是非空字符串";
+          throw "snowveil.sops.secret.name 必须是非空字符串";
 
       hostnameFromConfig =
         if config == null then
@@ -34,12 +34,12 @@ rec {
           if builtins.isString value && value != "" then
             value
           else
-            throw "cloud.sops.secret.config.networking.hostName 必须是非空字符串";
+            throw "snowveil.sops.secret.config.networking.hostName 必须是非空字符串";
 
       staticOptions =
         if source == "common" then
           if config != null then
-            throw "cloud.sops.secret.config 仅可用于 source = \"host\""
+            throw "snowveil.sops.secret.config 仅可用于 source = \"host\""
           else
             makeOptions commonFile
         else if source == "host" && host != null then
@@ -57,16 +57,16 @@ rec {
         if builtins.isString hostname && hostname != "" then
           wrapName (makeOptions (hostFile hostname))
         else
-          throw "cloud.sops.secret 无法从 config.networking.hostName 推导主机名";
+          throw "snowveil.sops.secret 无法从 config.networking.hostName 推导主机名";
     in
     if host != null && config != null then
-      throw "cloud.sops.secret 不能同时传入 host 和 config"
+      throw "snowveil.sops.secret 不能同时传入 host 和 config"
     else if staticOptions != null then
       wrapName staticOptions
     else if source == "host" then
       dynamicModule
     else
-      throw "cloud.sops.secret.source 必须是 \"common\" 或 \"host\"";
+      throw "snowveil.sops.secret.source 必须是 \"common\" 或 \"host\"";
 
   mkModule =
     {

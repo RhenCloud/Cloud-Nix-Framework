@@ -1,6 +1,6 @@
 { lib }:
 
-# Cloud Nix Framework - 库入口
+# Snowveil - 库入口
 # 结构：
 #   ./discover.nix  - 目录自动发现
 #   ./host.nix      - 主机元数据
@@ -66,10 +66,10 @@ let
     in
     lib.mapAttrs (k: go) opts;
 
-  optionsCloud =
+  optionsSnowveil =
     { lib, ... }:
     {
-      options.cloud = {
+      options.snowveil = {
         users = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
@@ -89,10 +89,10 @@ let
       };
     };
 
-  optionsCloudHome =
+  optionsSnowveilHome =
     { lib, ... }:
     {
-      options.cloud = {
+      options.snowveil = {
         users = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
@@ -112,13 +112,13 @@ let
         inputs.self
           or (throw "error: missing required flake input
 
-  Cloud Nix Framework requires inputs.self
+  Snowveil requires inputs.self
   make sure 'self' is included in your flake inputs");
       nixpkgs =
         inputs.nixpkgs
           or (throw "error: missing required flake input
 
-  Cloud Nix Framework requires inputs.nixpkgs
+  Snowveil requires inputs.nixpkgs
   make sure 'nixpkgs' is included in your flake inputs");
       nixosSystem = nixpkgs.lib.nixosSystem;
       hm = inputs.home-manager or null;
@@ -144,7 +144,7 @@ let
         clean = args: sourceTools.clean ({ root = projectRoot; } // args);
       };
       projectSource = source.clean { };
-      cloudInject = {
+      snowveilInject = {
         inherit
           patches
           version
@@ -153,25 +153,25 @@ let
           ;
         sops = sops';
       };
-      cloud = cloudInject;
+      snowveil = snowveilInject;
 
       # overlays: 支持两种签名
       #   final: prev: { ... }                      标准 nixpkgs overlay
-      #   extras: final: prev: ...                  带框架参数的扩展签名（extras = { inputs, self, cloud }）
-      #   { inputs, self, cloud }: final: prev: ... 带框架参数的解构签名
+      #   extras: final: prev: ...                  带框架参数的扩展签名（extras = { inputs, self, snowveil }）
+      #   { inputs, self, snowveil }: final: prev: ... 带框架参数的解构签名
       loadOverlay =
         path:
         let
           imported = import path;
           argNames = builtins.functionArgs imported;
-          isStructuredArgs = argNames ? inputs || argNames ? self || argNames ? cloud;
+          isStructuredArgs = argNames ? inputs || argNames ? self || argNames ? snowveil;
         in
         if isStructuredArgs then
-          imported { inherit inputs self cloud; }
+          imported { inherit inputs self snowveil; }
         else
           let
             result = builtins.tryEval (imported {
-              inherit inputs self cloud;
+              inherit inputs self snowveil;
             });
           in
           if result.success && builtins.isFunction result.value then result.value else imported;
@@ -211,7 +211,7 @@ let
               lib
               inputs
               self
-              cloud
+              snowveil
               ;
           };
         in
@@ -222,7 +222,7 @@ let
         let
           fn = import path;
           declared = builtins.functionArgs fn;
-          extras = lib.intersectAttrs declared { inherit inputs self cloud; };
+          extras = lib.intersectAttrs declared { inherit inputs self snowveil; };
         in
         pkgs.callPackage fn extras;
 
@@ -233,7 +233,7 @@ let
             inputs
             self
             channels
-            cloud
+            snowveil
             ;
         }
         // extraSpecialArgs;
@@ -426,7 +426,7 @@ let
           embedModule =
             { config, lib, ... }:
             let
-              bfe = config.cloud.homeManager.backupFileExtension;
+              bfe = config.snowveil.homeManager.backupFileExtension;
             in
             {
               imports = [
@@ -464,11 +464,11 @@ let
               // lib.optionalAttrs (bfe != null) { backupFileExtension = bfe; };
             };
 
-          setCloudModule = _: { config.cloud.users = users; };
+          setSnowveilModule = _: { config.snowveil.users = users; };
 
           finalModules = [
-            optionsCloud
-            setCloudModule
+            optionsSnowveil
+            setSnowveilModule
             (_: { nixpkgs = { inherit pkgs; }; })
           ]
           ++ lib.optionals (embedForHost && users != [ ]) [ embedModule ]
@@ -520,7 +520,7 @@ let
           inherit pkgs;
           extraSpecialArgs = specialArgsFor extraSpecialArgs;
           modules = [
-            optionsCloudHome
+            optionsSnowveilHome
           ]
           ++ homeModulesFor {
             inherit user host selection;
@@ -562,7 +562,7 @@ let
           flatOr =
             name: default:
             if builtins.hasAttr name args_raw then
-              builtins.trace "[CNF] mkFlake 参数 '${name}' 已弃用，请使用嵌套命名空间（见文档）" args_raw.${name}
+              builtins.trace "[Snowveil] mkFlake 参数 '${name}' 已弃用，请使用嵌套命名空间（见文档）" args_raw.${name}
             else
               default;
 
@@ -1057,11 +1057,11 @@ let
                     missing=${lib.escapeShellArg (builtins.toJSON missing)}
                     unexpected=${lib.escapeShellArg (builtins.toJSON unexpected)}
                     if [ "$missing" != "[]" ]; then
-                      echo "cloud-discovery: outputs.expected.${kind} 缺少以下项目：" >&2
+                      echo "snowveil-discovery: outputs.expected.${kind} 缺少以下项目：" >&2
                       echo "$missing" | ${pkgs.jq}/bin/jq -r '.[]' | sed 's/^/  - /' >&2
                     fi
                     if [ "$unexpected" != "[]" ]; then
-                      echo "cloud-discovery: outputs.expected.${kind} 包含以下意外项目：" >&2
+                      echo "snowveil-discovery: outputs.expected.${kind} 包含以下意外项目：" >&2
                       echo "$unexpected" | ${pkgs.jq}/bin/jq -r '.[]' | sed 's/^/  - /' >&2
                     fi
                     if [ "$missing" != "[]" ] || [ "$unexpected" != "[]" ]; then
@@ -1070,9 +1070,11 @@ let
                     touch "$out"
                   '';
                 in
-                pkgs.runCommand "cloud-discovery-check-${kind}-${sys}" { } "bash ${script}";
+                pkgs.runCommand "snowveil-discovery-check-${kind}-${sys}" { } "bash ${script}";
               expectedChecks = lib.listToAttrs (
-                map (kind: lib.nameValuePair "cloud-discovery-expected-${kind}" (checkExpected kind)) kindsToCheck
+                map (
+                  kind: lib.nameValuePair "snowveil-discovery-expected-${kind}" (checkExpected kind)
+                ) kindsToCheck
               );
 
               checkedEvalOutputs =
@@ -1137,10 +1139,14 @@ let
               evalChecks =
                 assert checkedEval;
                 lib.optionalAttrs (evalHosts == true || hostEvalRecords != [ ]) {
-                  cloud-eval-hosts = pkgs.writeText "cloud-eval-hosts-${sys}.json" (builtins.toJSON hostEvalRecords);
+                  snowveil-eval-hosts = pkgs.writeText "snowveil-eval-hosts-${sys}.json" (
+                    builtins.toJSON hostEvalRecords
+                  );
                 }
                 // lib.optionalAttrs (evalHomes == true || homeEvalRecords != [ ]) {
-                  cloud-eval-homes = pkgs.writeText "cloud-eval-homes-${sys}.json" (builtins.toJSON homeEvalRecords);
+                  snowveil-eval-homes = pkgs.writeText "snowveil-eval-homes-${sys}.json" (
+                    builtins.toJSON homeEvalRecords
+                  );
                 };
 
               checkedDiagnosticsOutputs =
@@ -1290,7 +1296,7 @@ let
                   ]
               ) (builtins.attrNames perHostReport);
               dotFiles = globalDotFiles ++ hostDotFiles;
-              dotCheck = pkgs.runCommand "cloud-module-graph-dot-${sys}" { } ''
+              dotCheck = pkgs.runCommand "snowveil-module-graph-dot-${sys}" { } ''
                 mkdir -p "$out"
                 ${lib.concatMapStringsSep "\n" (
                   file:
@@ -1303,13 +1309,13 @@ let
                   ''
                 ) dotFiles}
               '';
-              reservedCollision = lib.findFirst (name: lib.hasPrefix "cloud-" name) null discoveredUserChecks;
+              reservedCollision = lib.findFirst (name: lib.hasPrefix "snowveil-" name) null discoveredUserChecks;
             in
             if reservedCollision != null then
               throw ''
                 error: reserved output name
 
-                'checks.${reservedCollision}' 使用了框架保留的 cloud- 前缀
+                'checks.${reservedCollision}' 使用了框架保留的 snowveil- 前缀
                 hint: use a different name for your check
               ''
             else
@@ -1318,10 +1324,10 @@ let
               // expectedChecks
               // evalChecks
               // lib.optionalAttrs diagnostics.discovery {
-                cloud-discovery = pkgs.writeText "cloud-discovery-${sys}.json" (builtins.toJSON report);
+                snowveil-discovery = pkgs.writeText "snowveil-discovery-${sys}.json" (builtins.toJSON report);
               }
               // lib.optionalAttrs diagnostics.moduleGraph {
-                cloud-module-graph-dot = dotCheck;
+                snowveil-module-graph-dot = dotCheck;
               }
           );
 

@@ -1,4 +1,4 @@
 { runCommand }:
-runCommand "cloud-example-check" { } ''
+runCommand "snowveil-example-check" { } ''
   touch "$out"
 ''

@@ -3,5 +3,5 @@
   ...
 }:
 {
-  environment.variables.CLOUD_SERVER = "1";
+  environment.variables.SNOWVEIL_SERVER = "1";
 }

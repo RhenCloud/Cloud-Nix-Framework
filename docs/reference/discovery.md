@@ -1,6 +1,6 @@
 # Discovery 规范
 
-本文档定义 **CNF Discovery Specification v1.1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
+本文档定义 **Snowveil Discovery Specification v1.1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
 
 ## 术语
 
@@ -87,8 +87,8 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 框架按以下顺序合并模块，后者优先级高于前者（NixOS module system 的 `mkDefault`/`mkForce` 仍适用）：
 
 ```
-1. optionsCloud（框架 options 声明）
-2. setCloudModule（写入 config.cloud.users）
+1. optionsSnowveil（框架 options 声明）
+2. setSnowveilModule（写入 config.snowveil.users）
 3. nixpkgs.pkgs 注入
 4. embedModule（home-manager NixOS 模块，仅当 embedForHost && users != []）
 5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
@@ -134,14 +134,14 @@ homes/<user>/
         
     当 `homes/&lt;user&gt;/&lt;host&gt;.nix` 存在时：
     
-1. 框架将 `&lt;user&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.cloud.users`。
+1. 框架将 `&lt;user&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.snowveil.users`。
 2. 若该主机的 `home.embed` 为 `true`，框架自动注入 `home-manager.users.&lt;user&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
 3. 若 `home.embed` 为 `false`，仅生成独立的 `homeConfigurations."&lt;user&gt;@&lt;host&gt;"`，不嵌入 NixOS。
 
 ### 模块注入顺序（独立 home）
 
 ```
-1. optionsCloudHome（框架 options 声明）
+1. optionsSnowveilHome（框架 options 声明）
 2. 自动发现的 modules/（home 侧，按角色过滤后进行稳定拓扑排序）
 3. homes/<user>/default.nix（若存在）
 4. homes/<user>/<host>.nix（若存在且当前构造的是 per-host home）
@@ -304,7 +304,7 @@ packages/<name>.<system>/default.nix   →  packages.<system>.<name>   （旧式
 
 ### callPackage 调用约定
 
-框架用 `pkgs.callPackage` 调用包文件，额外注入 `{ inputs, self, cloud }`（若包函数声明了这些参数）。
+框架用 `pkgs.callPackage` 调用包文件，额外注入 `{ inputs, self, snowveil }`（若包函数声明了这些参数）。
 
 ---
 
@@ -328,8 +328,8 @@ overlays/<name>/default.nix  →  overlays.<name>
 
 框架按以下顺序检测签名：
 
-1. `functionArgs` 含 `inputs`、`self` 或 `cloud` → 解构框架参数签名，调用 `imported { inherit inputs self cloud; }`。
-2. 以 `{ inherit inputs self cloud; }` 调用后返回函数 → 位置参数框架签名（如 `extras: final: prev: ...`）。
+1. `functionArgs` 含 `inputs`、`self` 或 `snowveil` → 解构框架参数签名，调用 `imported { inherit inputs self snowveil; }`。
+2. 以 `{ inherit inputs self snowveil; }` 调用后返回函数 → 位置参数框架签名（如 `extras: final: prev: ...`）。
 3. 其余 → 标准 nixpkgs overlay（`final: prev: ...` 或直接返回属性集，但后者会在 nixpkgs 应用时报错）。
 
 ### meta.nix 字段（overlays）
@@ -359,7 +359,7 @@ checks/<name>/default.nix  →  checks.<system>.<name>
 
 ### 保留名称
 
-`checks/` 下以 `cloud-` 开头的名称是框架保留命名空间，用于 discovery、expected、eval 和 DOT 检查；发现阶段遇到冲突会直接报错。
+`checks/` 下以 `snowveil-` 开头的名称是框架保留命名空间，用于 discovery、expected、eval 和 DOT 检查；发现阶段遇到冲突会直接报错。
 
 ---
 
@@ -384,7 +384,7 @@ lib/<name>.nix  →  lib.<name>
 
 - 扫描范围：`lib/` 下的**直接 .nix 文件**（不递归，不含子目录）。
 - output key 为去掉 `.nix` 后缀的文件名。
-- 框架用 `importFile` 调用，注入 `{ lib, inputs, self, cloud }`（按函数声明按需传入）。
+- 框架用 `importFile` 调用，注入 `{ lib, inputs, self, snowveil }`（按函数声明按需传入）。
 - 框架自身的 `lib/` 文件（`discover.nix`、`host.nix` 等）不在扫描范围内。
 
 ---
@@ -441,6 +441,6 @@ mkFlake 调用
 
 ## Discovery 报告契约
 
-`checks.<system>.cloud-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `cloud-` 前缀。
+`checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
 
 发现阶段同时维护 `hostsByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。

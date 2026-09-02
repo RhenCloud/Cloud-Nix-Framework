@@ -8,7 +8,7 @@
 
 ## 主要差异
 
-| | snowfallorg/lib | Cloud Nix Framework |
+| | snowfallorg/lib | Snowveil |
 | ---- | ---- | ---- |
 | 模块树 | NixOS 树 / HM 树分开 | 单树 + 文件名分拣 |
 | 角色过滤 | 无内置 | `roles` + 目录前缀 |
@@ -27,7 +27,7 @@ modules/
     └── desktop/hyprland/default.nix
 ```
 
-**CNF 结构**：
+**Snowveil 结构**：
 
 ```
 modules/
@@ -45,13 +45,13 @@ modules/desktop/hyprland/default.nix  # lib.mkEnableOption 等
 
 ## 迁移 systems
 
-snowfall 通常在 `lib.mkFlake` 的 `channels` 或 `systems` 中声明架构，CNF 从目录后缀或 `meta.nix` 提取：
+snowfall 通常在 `lib.mkFlake` 的 `channels` 或 `systems` 中声明架构，Snowveil 从目录后缀或 `meta.nix` 提取：
 
 ```
 # snowfall 主机目录
 systems/x86_64-linux/nixos-desktop/default.nix
 
-# CNF 主机目录
+# Snowveil 主机目录
 hosts/nixos-desktop.x86_64-linux/default.nix
 ```
 
@@ -68,15 +68,15 @@ outputs = inputs:
   };
 ```
 
-**CNF**：
+**Snowveil**：
 
 ```nix
 outputs = inputs:
-  inputs.cloud.lib.mkFlake {
+  inputs.snowveil.lib.mkFlake {
     inherit inputs;
   };
 ```
 
 ## namespace 对应
 
-snowfall 的 `namespace` 在 CNF 中没有直接对应。CNF 模块通常使用 `cloud.<feature>.enable` 或自定义命名空间（如 `myns.<feature>.enable`）；option 声明放在各模块的 `default.nix` 中。
+snowfall 的 `namespace` 在 Snowveil 中没有直接对应。Snowveil 模块通常使用 `snowveil.<feature>.enable` 或自定义命名空间（如 `myns.<feature>.enable`）；option 声明放在各模块的 `default.nix` 中。

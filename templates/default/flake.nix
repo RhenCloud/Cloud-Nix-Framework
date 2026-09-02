@@ -1,5 +1,5 @@
 {
-  description = "Cloud Nix Framework 模板";
+  description = "Snowveil 模板";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -9,12 +9,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    cloud = {
-      url = "github:RhenCloud/Cloud-Nix-Framework";
+    snowveil = {
+      url = "github:SnowveilOrg/Snowveil";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
   };
 
-  outputs = inputs: inputs.cloud.lib.mkFlake { inherit inputs; };
+  outputs = inputs: inputs.snowveil.lib.mkFlake { inherit inputs; };
 }

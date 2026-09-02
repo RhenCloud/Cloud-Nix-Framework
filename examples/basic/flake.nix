@@ -1,5 +1,5 @@
 {
-  description = "Cloud Nix Framework 最小示例";
+  description = "Snowveil 最小示例";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -9,12 +9,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    cloud = {
+    snowveil = {
       url = "path:../..";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
   };
 
-  outputs = inputs: inputs.cloud.lib.mkFlake { inherit inputs; };
+  outputs = inputs: inputs.snowveil.lib.mkFlake { inherit inputs; };
 }

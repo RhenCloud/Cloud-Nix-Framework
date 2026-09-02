@@ -53,7 +53,7 @@ outputs.expected = {
 
 - `subset` 只报告缺失项目，兼容旧行为；`exact` 同时报告缺失和意外项目。
 - `packages`、`apps`、`checks`、`devShells` 支持 `system → names`。旧的名称列表仍表示所有 systems 使用同一期望集合。
-- `checks` 只比较用户 `checks/` 目录；`cloud-*` 内部检查不参与。
+- `checks` 只比较用户 `checks/` 目录；`snowveil-*` 内部检查不参与。
 - `formatter` 是应生成 formatter 的 system 列表。
 - `deploy.nodes` 比较 `deploy.nodes` 的属性名。
 - `images` 比较主机 metadata 声明的格式。
@@ -74,8 +74,8 @@ outputs.eval = {
 框架为每个 system 生成：
 
 ```text
-checks.<system>.cloud-eval-hosts
-checks.<system>.cloud-eval-homes
+checks.<system>.snowveil-eval-hosts
+checks.<system>.snowveil-eval-homes
 ```
 
 两项默认关闭，也可设为 `true` 检查全部目标。列表中的名称必须已经被发现；未知名称或错误类型会在求值 checks 时直接报错。检查分别求值 NixOS `system.build.toplevel.drvPath` 和 Home Manager `activationPackage.drvPath`，并移除字符串 context，避免轻量检查持有目标 derivation 的 GC 引用。
@@ -92,14 +92,14 @@ outputs.diagnostics = {
 };
 ```
 
-- `discovery = false`：不生成 `cloud-discovery`。
-- `moduleGraph = false`：不生成 `cloud-module-graph-dot`。
+- `discovery = false`：不生成 `snowveil-discovery`。
+- `moduleGraph = false`：不生成 `snowveil-module-graph-dot`。
 - `perHostModuleGraph = false`：保留全局模块图，但省略 discovery 的 `perHost` 内容和 DOT 的 `hosts/` 子目录。
 
 ## 使用 mkSystem / mkHome 手动构造
 
 ```nix
-outputs.extra.nixosConfigurations.special = cloud.mkSystem {
+outputs.extra.nixosConfigurations.special = snowveil.mkSystem {
   host = "special";
   system = "x86_64-linux";
   modules = [ ./special.nix ];

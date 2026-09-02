@@ -1,6 +1,6 @@
 # 细粒度模块控制
 
-从 0.4.0 起，Cloud Nix Framework 支持在主机级别覆盖模块的启用/禁用状态，提供比角色系统更细粒度的控制。
+从 0.4.0 起，Snowveil 支持在主机级别覆盖模块的启用/禁用状态，提供比角色系统更细粒度的控制。
 
 ## 问题场景
 
@@ -203,7 +203,7 @@ modules/_common/nixos.nix             →  "_common"
 { config, pkgs, lib, ... }:
 {
   # CUDA 目前只支持 x86_64-linux
-  config = lib.mkIf config.cloud.roles.development.enable {
+  config = lib.mkIf config.snowveil.roles.development.enable {
     nixpkgs.config.cudaSupport = true;
     # ...
   };
@@ -278,7 +278,7 @@ A: 框架只负责加载/不加载模块文件。如果模块A依赖模块B但B�
 ```nix
 # modules/desktop/games-nvidia/default.nix
 {
-  imports = lib.optionals config.cloud.roles.desktop.nvidia.enable [
+  imports = lib.optionals config.snowveil.roles.desktop.nvidia.enable [
     ./nvidia-games.nix
   ];
 }
@@ -331,4 +331,4 @@ A: 不把它加到 `roles`，而不是在 `modules` 中逐个禁用：
 ### v0.4.0
 - 新增：`meta.nix` 中的 `modules` 字段支持细粒度模块覆盖
 - 新增：`moduleTools.validateModuleOverrides()` 验证覆盖配置
-- 新增：`cloud.lib.version` 支持 feature detection
+- 新增：`snowveil.lib.version` 支持 feature detection
