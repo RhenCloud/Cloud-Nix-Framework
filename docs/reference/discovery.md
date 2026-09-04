@@ -90,15 +90,63 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 1. optionsSnowveil（框架 options 声明）
 2. setSnowveilModule（写入 config.snowveil.users）
 3. nixpkgs.pkgs 注入
-4. embedModule（home-manager NixOS 模块，仅当 embedForHost && users != []）
-5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
-6. moduleRegistries 中的外部模块
-7. 主机自身的 default.nix（去除框架元数据字段）
-8. mkFlake 的 nixos.modules / mkSystem 的 extraModules
-9. mkSystem 的 extraNixosModules
+4. userDefaultsModule（users/<name>/meta.nix 生成的 users.users/groups，仅当 users != []）
+5. users/<name>/default.nix（用户补充模块，若存在）
+6. embedModule（home-manager NixOS 模块，仅当 embedForHost && 关联 home 的 users != []）
+7. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
+8. moduleRegistries 中的外部模块
+9. 主机自身的 default.nix（去除框架元数据字段）
+10. mkFlake 的 nixos.modules / mkSystem 的 extraModules
+11. mkSystem 的 extraNixosModules
+```
+---
+
+## users/ — 系统用户（一等实体）
+
+### 发现规则
+
+扫描范围：`users/` 下的**直接子目录**（每个子目录对应一个用户）。
+
+```
+users/<name>/
+├── meta.nix        →  用户元数据（必需，声明 hosts 等）
+└── default.nix     →  （可选）users.users.<name> 补充模块
 ```
 
+- `meta.nix` 必须存在，否则该目录被忽略（不报错）。
+- `meta.nix` 必须声明 `hosts = [ ... ]`（字符串列表），否则在发现阶段 `throw` 报错。
+- `default.nix` 是纯 NixOS 模块，会被注入到该用户所属的每台主机。
+
+### meta.nix 字段（users）
+
+| 字段 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `hosts` | `[string]` | — | **必需**，此用户关联的主机名列表（主机必须已发现） |
+| `uid` | `int` | `null` | 系统 UID（`null` 表示由 NixOS 自动分配） |
+| `gid` | `int` | `uid` | 主组 GID（缺省取 `uid`） |
+| `group` | `string` | `name` | 主组名（缺省与用户名一致） |
+| `extraGroups` | `[string]` | `[]` | 附加组 |
+| `description` | `string` | `null` | 用户描述 |
+| `home` | `string` | `null` | 主目录（`null` 表示 `/home/<name>`） |
+| `createHome` | `bool` | `true` | 是否创建主目录 |
+| `isNormalUser` | `bool` | `true` | 是否普通用户 |
+| `hashedPasswordSecret` | `string` | `null` | 见下方约定 |
+
+### 生成规则
+
+框架在用户关联的每台主机上自动生成 `users.users.<name>` 与 `users.groups.<name>`：
+
+- 核心字段（`isNormalUser`、`home`、`createHome`、`uid`、`extraGroups`、`description`、`hashedPasswordFile`）均用 `mkDefault` 包裹，可被 `users/<name>/default.nix` 或主机模块覆盖。
+- `group` 使用普通值（非 `mkDefault`），因为 nixpkgs 在 `isNormalUser = true` 时会对 `group` 施加 `mkDefault "users"`；框架同时生成 `users.groups.<name> = {}`（可选 `gid`）以避免「primary group undefined」断言。
+- `uid` 缺省时 NixOS 自动分配；显式 `uid` 且 `isNormalUser = true` 时须 `>= 1000`。
+
+### hashedPasswordSecret 约定
+
+- 值以 `/` 开头 → 视为字面文件路径，直接作为 `hashedPasswordFile`。
+- 否则 → sops 密钥名，`hashedPasswordFile` 指向 `config.sops.secrets.<name>.path`，并自动声明 `sops.secrets.<name>`（来源为主机 sops 文件）。
+
 ---
+
 ## homes/ — Home Manager 配置
 
 ### 发现规则
@@ -132,11 +180,11 @@ homes/<user>/
     
     ### 自动嵌入 NixOS
         
-    当 `homes/&lt;user&gt;/&lt;host&gt;.nix` 存在时：
+    当 `users/&lt;name&gt;/meta.nix` 的 `hosts` 包含该主机，且 `homes/&lt;name&gt;/&lt;host&gt;.nix` 存在时：
     
-1. 框架将 `&lt;user&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.snowveil.users`。
-2. 若该主机的 `home.embed` 为 `true`，框架自动注入 `home-manager.users.&lt;user&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
-3. 若 `home.embed` 为 `false`，仅生成独立的 `homeConfigurations."&lt;user&gt;@&lt;host&gt;"`，不嵌入 NixOS。
+1. 框架将 `&lt;name&gt;` 写入 `nixosConfigurations.&lt;host&gt;` 的 `config.snowveil.users`。
+2. 若该主机的 `home.embed` 为 `true`，框架自动注入 `home-manager.users.&lt;name&gt;` 模块（无需在主机模块中手写 `home-manager.users`）。
+3. 若 `home.embed` 为 `false`，仅生成独立的 `homeConfigurations."&lt;name&gt;@&lt;host&gt;"`，不嵌入 NixOS。
 
 ### 模块注入顺序（独立 home）
 
@@ -395,6 +443,7 @@ mkFlake 调用
 │
 ├─ [1] 读取 lib/discover.nix（发现阶段，纯属性集，不求值 config）
 │       ├── hosts/       → discovered.hosts      [ { name, system, path, meta } ]
+│       ├── users/       → discovered.users      [ { name, metaPath, defaultPath, hosts } ]
 │       ├── homes/       → discovered.homes      [ { user, hosts } ]
 │       ├── modules/     → discovered.localGroupedModules / localAutoModules
 │       ├── packages/    → discovered.packages   [ { name, path, meta, explicitSystem } ]
@@ -442,4 +491,4 @@ mkFlake 调用
 
 `checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
 
-发现阶段同时维护 `hostsByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。
+发现阶段同时维护 `hostsByName`、`usersByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 users/homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。

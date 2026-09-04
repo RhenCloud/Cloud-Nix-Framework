@@ -18,7 +18,7 @@ homes/
 
 ## 嵌入式 HM
 
-当 `homes/<user>/<host>.nix` 存在时，框架自动将该用户注入 `nixosConfigurations.<host>` 的 `config.snowveil.users`，并在嵌入启用时生成 `home-manager.users.<user>` 配置，无需手写。
+当 `users/<user>/meta.nix` 的 `hosts` 包含该主机时，框架自动将该用户注入 `nixosConfigurations.<host>` 的 `config.snowveil.users`，并生成 `users.users.<user>` / `users.groups.<user>`；在嵌入启用时生成 `home-manager.users.<user>` 配置，无需手写。
 
 全局启用，单独关闭：
 

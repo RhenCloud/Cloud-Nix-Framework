@@ -52,6 +52,10 @@ nix flake init --template github:SnowveilOrg/Snowveil
 │   └── nixos-desktop/
 │       ├── meta.nix                      # 角色与框架元数据
 │       └── default.nix                   # nixosConfigurations.nixos-desktop
+├── users/
+│   └── rhencloud/
+│       ├── meta.nix                      # 声明 hosts、uid、组、密码等
+│       └── default.nix                   # 可选：users.users.rhencloud 补充
 ├── homes/
 │   └── rhencloud/
 │       ├── default.nix                   # homeConfigurations.rhencloud
@@ -76,6 +80,8 @@ nix flake init --template github:SnowveilOrg/Snowveil
 | ---- | ------------- |
 | `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
 | `hosts/<name>/meta.nix` | 角色与主机级 Home Manager 策略（需声明 `system`） |
+| `users/<name>/meta.nix` | 声明用户属性，自动生成 `users.users.<name>` / `users.groups.<name>` |
+| `users/<name>/default.nix` | 可选：`users.users.<name>` 补充模块 |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成 `nixosModules.<目录键>` / `homeModules.<目录键>` |
@@ -429,12 +435,30 @@ inputs.snowveil.lib.mkFlake {
 
 模块名由相对路径去掉 magic 文件名、以 `.` 连接派生（`modules/desktop/hyprland/nixos.nix` → `desktop.hyprland`），用于错误定位与去重。category 层（`modules/<category>/<name>/`）为可选的组织方式，发现逻辑容忍任意深度。
 
-### 主机与用户关联（自动推导）
+### 用户（一等实体）与主机关联
 
-主机与 home 的关联由目录结构推导，无需在 host 模块里手写 `config.snowveil.users`：
+用户由 `users/<name>/` 目录声明，是框架的一等实体，不再是 `homes/<user>/<host>.nix` 的推导结果。`users/<name>/meta.nix` 是用户与主机关联的**唯一来源**：
+
+```nix
+# users/rhencloud/meta.nix
+{
+  hosts = [ "nixos-desktop" "hm-standalone" ];  # 此用户关联的主机（必需）
+  uid = 1000;
+  extraGroups = [ "wheel" ];
+  hashedPasswordSecret = "rhencloud-password";  # sops 密钥名，或 "/字面/路径"
+}
+```
+
+框架在对应主机自动生成 `users.users.<name>` 与 `users.groups.<name>`（`isNormalUser`、`home`、`createHome`、`group`、`uid`、`extraGroups`、`description`、`hashedPasswordFile`），默认值均用 `mkDefault` 包裹，可被 `users/<name>/default.nix` 或主机模块覆盖：
+
+- `hashedPasswordSecret` 以 `/` 开头 → 视为字面文件路径，直接作为 `hashedPasswordFile`。
+- 否则 → sops 密钥名，`hashedPasswordFile` 指向 `config.sops.secrets.<name>.path`，并自动声明 `sops.secrets.<name>`（来源主机文件）。
+- `users/<name>/default.nix` 是补充模块（可选），在其中覆写自动生成的字段或追加 `users.users.<name>` 其他属性。
+
+home 配置仍在 `homes/`：
 
 - `homes/<user>/default.nix` 是共享 home，同时生成 `homeConfigurations.<user>`。
-- `homes/<user>/<host>.nix` 生成 `homeConfigurations."<user>@<host>"`，并将用户关联到对应主机。
+- `homes/<user>/<host>.nix` 生成 `homeConfigurations."<user>@<host>"`，把用户的 home 配置关联到对应主机。
 - 默认嵌入关联 home；关闭嵌入只影响 NixOS，独立 home output 仍然保留。
 
 每台主机可以单独配置：
@@ -456,7 +480,7 @@ home.embed = {
 };
 ```
 
-`home.useGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`snowveil.users` 由框架写入推导结果，模块可读取但不应手动赋值。
+`home.useGlobalPkgs` 支持相同的 bool、函数和 per-host 属性集形式。`snowveil.users` 由框架根据 `users/<name>/meta.nix` 的 `hosts` 写入，模块可读取但不应手动赋值。
 
 ## Overlays 与打补丁
 

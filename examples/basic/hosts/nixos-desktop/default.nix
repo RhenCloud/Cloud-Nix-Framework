@@ -9,11 +9,6 @@
 
     system.stateVersion = "25.05";
 
-    users.users.rhencloud = {
-      isNormalUser = true;
-      home = "/home/rhencloud";
-    };
-
     networking.hostName = "nixos-desktop";
 
     environment = {

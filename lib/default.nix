@@ -15,6 +15,7 @@ let
   sourceTools = import ./source.nix { inherit lib; };
   moduleTools = import ./internal/modules.nix { inherit lib; };
   depGraph = import ./internal/depgraph.nix { inherit lib; };
+  userTools = import ./user.nix { inherit lib; };
 
   defaultSystems = [
     "x86_64-linux"
@@ -387,7 +388,9 @@ let
           hostModule = hostRecord.path;
           specialArgs = specialArgsFor extraSpecialArgs;
           homeSpecialArgs = specialArgsFor extraHomeSpecialArgs;
-          users = usersForHost host;
+          hostUsers = usersForHost host;
+          hostUserRecords = map (name: discovered.usersByName.${name}) hostUsers;
+          hostHomeUsers = lib.filter (name: builtins.hasAttr name discovered.homesByUser) hostUsers;
 
           inherit (plan) metadata;
           embedForHost = hostMeta.hostPolicyFromMetadata {
@@ -413,6 +416,15 @@ let
 
           hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ [ hostModule ];
 
+          userDefaultsModule = userTools.mkUsersModule {
+            users = map (u: {
+              inherit (u) name;
+              inherit (u) meta;
+            }) hostUserRecords;
+            sopsFile = sops'.hostFile host;
+          };
+          userDefaultModules = lib.filter (p: p != null) (map (u: u.defaultPath) hostUserRecords);
+
           embedModule =
             { config, lib, ... }:
             let
@@ -422,7 +434,7 @@ let
               imports = [
                 (
                   if hm == null then
-                    throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " users}），但缺少 home-manager input"
+                    throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " hostHomeUsers}），但缺少 home-manager input"
                   else
                     hm.nixosModules.home-manager
                 )
@@ -431,7 +443,7 @@ let
                 inherit useGlobalPkgs;
                 useUserPackages = true;
                 extraSpecialArgs = homeSpecialArgs;
-                users = lib.genAttrs users (
+                users = lib.genAttrs hostHomeUsers (
                   u:
                   {
                     imports =
@@ -454,14 +466,16 @@ let
               // lib.optionalAttrs (bfe != null) { backupFileExtension = bfe; };
             };
 
-          setSnowveilModule = _: { config.snowveil.users = users; };
+          setSnowveilModule = _: { config.snowveil.users = hostUsers; };
 
           finalModules = [
             optionsSnowveil
             setSnowveilModule
             (_: { nixpkgs = { inherit pkgs; }; })
           ]
-          ++ lib.optionals (embedForHost && users != [ ]) [ embedModule ]
+          ++ lib.optionals (hostUserRecords != [ ]) [ userDefaultsModule ]
+          ++ userDefaultModules
+          ++ lib.optionals (embedForHost && hostHomeUsers != [ ]) [ embedModule ]
           ++ hostModules
           ++ modules
           ++ extraModules

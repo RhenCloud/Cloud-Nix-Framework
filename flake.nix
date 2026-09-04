@@ -553,6 +553,16 @@
             test "${exampleHost.config.environment.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG}" = "nixos-only"
             printf '%s\n' "${toString exampleHost.config.snowveil.users}" > "$out"
           '';
+          users = pkgs.runCommand "snowveil-users" { } ''
+            test "${toString exampleHost.config.users.users.rhencloud.isNormalUser}" = "1"
+            test "${exampleHost.config.users.users.rhencloud.home}" = "/home/rhencloud"
+            test "${exampleHost.config.users.users.rhencloud.group}" = "rhencloud"
+            test "${toString exampleHost.config.users.users.rhencloud.uid}" = "1000"
+            test "${toString exampleHost.config.users.groups.rhencloud.gid}" = "1000"
+            test "${toString exampleHost.config.users.users.rhencloud.extraGroups}" = "wheel"
+            test "${exampleStandaloneHost.config.users.users.rhencloud.group}" = "rhencloud"
+            printf '%s\n' "${toString exampleHost.config.users.users.rhencloud.uid}" > "$out"
+          '';
           home = pkgs.runCommand "snowveil-home" { } ''
             printf '%s\n' "${exampleHome.config.home.username}" > "$out"
           '';

@@ -12,6 +12,10 @@
 │   └── my-host-fqdn/
 │       ├── meta.nix                      # { system = "x86_64-linux"; roles = [...]; }
 │       └── default.nix
+├── users/
+│   └── rhencloud/
+│       ├── meta.nix                      # 声明 hosts、uid、组、密码等
+│       └── default.nix                   # 可选：users.users.rhencloud 补充
 ├── homes/
 │   └── rhencloud/
 │       ├── default.nix                   # homeConfigurations.rhencloud
@@ -39,6 +43,8 @@
 | ---- | ------------- |
 | `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
 | `hosts/<name>/meta.nix` | 角色与每主机 Home Manager 策略，**必须声明 `system`** |
+| `users/<name>/meta.nix` | 声明用户属性，自动生成 `users.users.<name>` / `users.groups.<name>` |
+| `users/<name>/default.nix` | 可选：`users.users.<name>` 补充模块 |
 | `homes/<user>/default.nix` | `homeConfigurations.<user>` |
 | `homes/<user>/<host>.nix` | `homeConfigurations."<user>@<host>"` |
 | `modules/**/{default,nixos,home}.nix` | 自动注入，并生成目录级 `nixosModules` / `homeModules` |
@@ -98,9 +104,29 @@
 
 `default.nix` 是纯 NixOS 模块，不再被框架解析框架元数据。新配置请始终使用 `meta.nix` 声明 system、角色和框架策略。
 
+## 用户（一等实体）
+
+用户由 `users/<name>/` 目录声明，是框架的一等实体，不再是 `homes/<user>/<host>.nix` 的推导结果。`users/<name>/meta.nix` 是用户与主机关联的**唯一来源**：
+
+```nix
+# users/rhencloud/meta.nix
+{
+  hosts = [ "nixos-desktop" "hm-standalone" ];  # 必需：此用户关联的主机
+  uid = 1000;
+  extraGroups = [ "wheel" ];
+  hashedPasswordSecret = "rhencloud-password";  # sops 密钥名，或 "/字面/路径"
+}
+```
+
+框架在对应主机自动生成 `users.users.<name>` 与 `users.groups.<name>`（`isNormalUser`、`home`、`createHome`、`group`、`uid`、`extraGroups`、`description`、`hashedPasswordFile`），默认值均用 `mkDefault` 包裹，可被 `users/<name>/default.nix` 或主机模块覆盖：
+
+- `hashedPasswordSecret` 以 `/` 开头 → 视为字面文件路径，直接作为 `hashedPasswordFile`。
+- 否则 → sops 密钥名，`hashedPasswordFile` 指向 `config.sops.secrets.<name>.path`，并自动声明 `sops.secrets.<name>`（来源主机文件）。
+- `users/<name>/default.nix`（可选）是补充模块，用于覆写自动生成字段或追加其他 `users.users.<name>` 属性。
+
 ## 主机与 home 自动关联
 
-- `homes/<user>/<host>.nix` 自动把用户关联到该主机，并生成 `homeConfigurations."<user>@<host>"`。
+- `homes/<user>/<host>.nix` 把用户的 home 配置关联到该主机，并生成 `homeConfigurations."<user>@<host>"`。
 - `homes/<user>/default.nix` 是共享 home，并生成 `homeConfigurations.<user>`。
 - `home.embed = false` 只关闭该主机的嵌入式 HM，独立 home output 仍然保留。
 
@@ -118,7 +144,7 @@ outputs = inputs:
   };
 ```
 
-主机 `meta.nix` 中的设置优先于全局策略。`snowveil.users` 仍由框架根据目录写入，供模块读取，不应手动赋值。
+主机 `meta.nix` 中的设置优先于全局策略。`snowveil.users` 仍由框架根据 `users/<name>/meta.nix` 的 `hosts` 写入，供模块读取，不应手动赋值。
 
 ## Package 元数据
 

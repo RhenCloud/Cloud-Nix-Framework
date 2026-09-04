@@ -182,15 +182,47 @@ let
     }
   ) (onlyDirs (listDirAt "homes"));
   homesByUser = builtins.listToAttrs (map (home: lib.nameValuePair home.user home) homes);
-  usersByHost = lib.mapAttrs (_: records: map (record: record.user) records) (
-    lib.groupBy (record: record.host) (
+
+  normalizeHosts =
+    user: hosts:
+    if hosts == null then
+      throw "Snowveil 框架错误：users/${user}/meta.nix 必须声明 hosts（例如 hosts = [ \"nixos-desktop\" ]）"
+    else if !builtins.isList hosts then
+      throw "Snowveil 框架错误：users/${user}/meta.nix 的 hosts 必须是字符串列表"
+    else if !lib.all (host: builtins.isString host) hosts then
+      throw "Snowveil 框架错误：users/${user}/meta.nix 的 hosts 必须是字符串列表"
+    else
+      hosts;
+
+  parseUserDir =
+    e:
+    let
+      rawName = e.name;
+      metaPath = projectRoot + "/users/" + rawName + "/meta.nix";
+      defPath = projectRoot + "/users/" + rawName + "/default.nix";
+      meta = readMetadata metaPath;
+    in
+    if !builtins.pathExists metaPath then
+      null
+    else
+      {
+        name = rawName;
+        inherit metaPath meta;
+        defaultPath = if builtins.pathExists defPath then defPath else null;
+        hosts = normalizeHosts rawName (meta.hosts or null);
+      };
+
+  users = lib.filter (user: user != null) (map parseUserDir (onlyDirs (listDirAt "users")));
+  usersByName = builtins.listToAttrs (map (user: lib.nameValuePair user.name user) users);
+  usersByHost = lib.mapAttrs (_: us: map (user: user.name) us) (
+    lib.groupBy (entry: entry.host) (
       lib.concatMap (
-        home:
+        user:
         map (host: {
           inherit host;
-          inherit (home) user;
-        }) home.hosts
-      ) homes
+          inherit (user) name;
+        }) user.hosts
+      ) users
     )
   );
 
@@ -209,6 +241,8 @@ in
     hostsByName
     homes
     homesByUser
+    users
+    usersByName
     usersByHost
     ;
 

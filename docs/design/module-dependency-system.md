@@ -180,6 +180,7 @@ Discovery 阶段负责：
 | 主机 `modules` 覆盖 | `true` 可补回 role 未选中的本地模块，`false` 可触发硬依赖错误 |
 | `moduleRegistries` | 当前没有本地模块名，不进图，固定追加在本地模块之后 |
 | `hosts/<host>/default.nix` | 作为终端模块追加，不进图 |
+| `users/<name>/default.nix` | 作为终端模块追加，不进图 |
 | `homes/<user>/*.nix` | 作为终端模块追加，不进图 |
 | `nixosModules` / `homeModules` outputs | 仍输出目录组 `{ imports = paths; }`，不会携带图解析器 |
 

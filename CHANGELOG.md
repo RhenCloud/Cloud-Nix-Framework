@@ -38,9 +38,14 @@
 - 模块依赖字段支持 `nixos` / `home` 分侧追加；新增 `moduleGroups`、`requiresGroups`、`provides` 与 `requiresCapabilities`。
 - `snowveil-discovery` 增加 schema、规范、框架版本和 system 元数据；新增稳定 DOT 图输出。
 - `snowveil.sops.secret` 支持传入 `config` 后返回可直接合并的普通 option 属性集。
+- `users/<name>/` 目录：用户成为一等实体，框架在对应主机自动生成 `users.users.<name>` 与 `users.groups.<name>`。
 
 ### 破坏性变更
 
+- **用户与主机关联来源改为 `users/<name>/meta.nix`**：用户不再是 `usersByHost`（由 `homes/<user>/<host>.nix` 推导）的间接结果。
+  - **迁移**：新建 `users/<name>/meta.nix`，声明 `hosts = [ ... ]`（必需）以及 `uid`、`extraGroups`、`hashedPasswordSecret` 等用户属性；主机的 `users.users.<name>` 不再需要手写。
+  - **理由**：让「这台机器有哪些人」收敛到 `users/` 一处，用户属性（uid、组、密码文件）由框架统一生成，避免分散在 host 模块与 homes 目录两处。
+  - **注意**：`homes/<user>/<host>.nix` 仍用于把用户的 home 配置关联到主机（生成 `homeConfigurations."<user>@<host>"`），但不再决定用户归属。
 - **hosts 目录命名**（0.4.0）：从 `hosts/<name>.<system>/` 改为 `hosts/<name>/`，system 必须在 `meta.nix` 中显式声明。
   - **迁移**：重命名所有 `hosts/` 子目录（去掉 `.x86_64-linux` 等后缀），并在各目录的 `meta.nix` 中添加 `system = "<system>"` 字段。
   - **理由**：消除目录名中的点号歧义（FQDN 型主机名无需特殊处理），并显式表达 system 是强制声明而非可选推导。

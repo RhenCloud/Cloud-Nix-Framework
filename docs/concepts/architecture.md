@@ -8,7 +8,8 @@ mkFlake 调用
 ├─ [1] 发现阶段（lib/discover.nix）
 │       纯文件系统扫描，不求值任何 Nix 配置
 │       ├── hosts/       → 列表 + hostsByName
-│       ├── homes/       → 列表 + homesByUser + usersByHost
+│       ├── users/       → 列表 + usersByName + usersByHost（用户一等实体）
+│       ├── homes/       → 列表 + homesByUser
 │       ├── modules/     → groupedModules + 模块名索引
 │       ├── packages/    → [ { name, path, meta, system? } ]
 │       ├── overlays/    → [ { name, path } ]
@@ -42,8 +43,9 @@ mkFlake 调用
 ```
 lib/
 ├── default.nix     # mkFlake / mkSystem / mkHome / mkLib 入口
-├── discover.nix    # 文件系统发现（hosts/homes/packages/...）
+├── discover.nix    # 文件系统发现（hosts/users/homes/packages/...）
 ├── host.nix        # meta.nix 解析、角色过滤、HM 策略
+├── user.nix        # 用户元数据归一化与 users.users/groups 生成
 ├── sops.nix        # sops helper（可选扩展）
 ├── patches.nix     # patch helper（可选扩展）
 └── fs.nix          # 文件系统遍历工具
@@ -57,12 +59,14 @@ lib/
 1. optionsSnowveil（框架 options 声明：snowveil.users、snowveil.homeManager.*）
 2. setSnowveilModule（写入 config.snowveil.users）
 3. nixpkgs.pkgs 注入
-4. embedModule（home-manager NixOS 模块，仅当启用嵌入且 users != []）
-5. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
-6. moduleRegistries 中的外部模块
-7. 主机自身的 default.nix
-8. mkFlake 的 nixos.modules / mkSystem 的 extraModules
-9. mkSystem 的 extraNixosModules
+4. userDefaultsModule（users/<name>/meta.nix 生成的 users.users/groups，仅当 users != []）
+5. users/<name>/default.nix（用户补充模块，若存在）
+6. embedModule（home-manager NixOS 模块，仅当启用嵌入且关联 home 的 users != []）
+7. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
+8. moduleRegistries 中的外部模块
+9. 主机自身的 default.nix
+10. mkFlake 的 nixos.modules / mkSystem 的 extraModules
+11. mkSystem 的 extraNixosModules
 ```
 
 ## specialArgs 注入路径
