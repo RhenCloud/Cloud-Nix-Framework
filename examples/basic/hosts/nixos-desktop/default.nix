@@ -9,8 +9,6 @@
 
     system.stateVersion = "25.05";
 
-    networking.hostName = "nixos-desktop";
-
     environment = {
       systemPackages = [ pkgs.hello ];
       variables.SNOWVEIL_HOST_CONFIG_ARG = config.networking.hostName;

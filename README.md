@@ -50,8 +50,11 @@ nix flake init --template github:SnowveilOrg/Snowveil
 ├── flake.nix
 ├── hosts/
 │   └── nixos-desktop/
-│       ├── meta.nix                      # 角色与框架元数据
-│       └── default.nix                   # nixosConfigurations.nixos-desktop
+│       ├── meta.nix                      # 角色与框架元数据（必须声明 system）
+│       ├── default.nix                   # nixosConfigurations.nixos-desktop
+│       ├── hardware.nix                  # 可选：硬件配置，存在则自动 import
+│       ├── disk.nix                      # 可选：磁盘布局（disko / fileSystems）
+│       └── network.nix                   # 可选：网络配置，存在则自动 import
 ├── users/
 │   └── rhencloud/
 │       ├── meta.nix                      # 声明 hosts、uid、组、密码等
@@ -79,6 +82,7 @@ nix flake init --template github:SnowveilOrg/Snowveil
 | 目录 | 生成的 output |
 | ---- | ------------- |
 | `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>/{hardware,disk,network}.nix` | 可选：主机目录 magic 文件，存在则按固定顺序随主机自动 import |
 | `hosts/<name>/meta.nix` | 角色与主机级 Home Manager 策略（需声明 `system`） |
 | `users/<name>/meta.nix` | 声明用户属性，自动生成 `users.users.<name>` / `users.groups.<name>` |
 | `users/<name>/default.nix` | 可选：`users.users.<name>` 补充模块 |
@@ -96,7 +100,7 @@ nix flake init --template github:SnowveilOrg/Snowveil
 | `shells/<name>/default.nix` | `devShells.<system>.<name>` |
 | `checks/<name>/default.nix` | `checks.<system>.<name>` |
 
-> `hosts/` 下的主机目录**必须**带 `.<system>` 后缀。package/check/app/shell 可添加 `meta.nix`，通过 `enable` 与 `systems` 控制自动发现。
+> `hosts/` 下的主机目录使用裸名称，`meta.nix` **必须声明 `system`**；目录内可选识别 `hardware.nix` / `disk.nix` / `network.nix`，存在则按固定顺序自动 import。package/check/app/shell 可添加 `meta.nix`，通过 `enable` 与 `systems` 控制自动发现。
 
 ### 3. flake.nix 最小示例
 
@@ -264,7 +268,7 @@ outputs = inputs:
 
 ### 求值模型
 
-推荐在 `hosts/<name>/meta.nix` 保存角色与框架策略。该文件是静态属性集，**必须声明 `system` 字段**；框架无需预执行函数式 host module，`default.nix` 只交给 NixOS module system 正式求值，因此可在外层使用真实 `config`。
+推荐在 `hosts/<name>/meta.nix` 保存角色与框架策略。该文件是静态属性集，**必须声明 `system` 字段**；框架无需预执行函数式 host module，`default.nix` 只交给 NixOS module system 正式求值，因此可在外层使用真实 `config`。主机目录还支持可选的 `hardware.nix` / `disk.nix` / `network.nix`，存在则按此固定顺序随 `default.nix` 自动 import（见[多主机管理](./docs/guide/multiple-hosts.md)）。
 
 ```nix
 # hosts/nixos-desktop/meta.nix

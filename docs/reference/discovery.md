@@ -1,6 +1,6 @@
 # Discovery 规范
 
-本文档定义 **Snowveil Discovery Specification v1.1** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
+本文档定义 **Snowveil Discovery Specification v1.2** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
 
 ## 术语
 
@@ -8,7 +8,7 @@
 | ---- | ---- |
 | **发现**（discovery） | 框架扫描项目目录、识别符合约定的文件并提取元数据的过程 |
 | **项目根**（root） | `mkFlake` 调用时的配置仓库根目录，默认为 `self.outPath` |
-| **magic 文件** | 具有固定语义的文件名：`default.nix`、`nixos.nix`、`home.nix`、`meta.nix` |
+| **magic 文件** | 具有固定语义的文件名：`default.nix`、`options.nix`、`nixos.nix`、`home.nix`、`meta.nix`，以及主机目录专属的 `hardware.nix`、`disk.nix`、`network.nix` |
 | **meta.nix** | 与某目录并列的元数据文件，直接返回属性集，不接收模块参数 |
 | **output key** | 最终出现在 flake outputs 属性集中的名称 |
 
@@ -58,10 +58,29 @@
 - 各个 `hosts/&lt;name&gt;/` 必须有 `meta.nix`，其中包含 `system` 字段。
 - 推荐理由：避免目录名中的点号歧义（FQDN 型主机名无需特殊处理），并显式表达架构声明。
 
+### 主机目录 magic 文件分拣（v1.2）
+
+主机目录除 `default.nix`（必需）与 `meta.nix`（仅元数据）外，框架按固定顺序识别以下可选 magic 文件：**存在则 import，缺失即跳过**。
+
+| 加载顺序 | 文件 | 用途（约定，非强制） |
+| :--: | ---- | -------------------- |
+| 1 | `default.nix` | 主机意图：主机名、时区、想启用的服务 |
+| 2 | `hardware.nix` | 硬件相关配置（可在此 import nixos-hardware 等） |
+| 3 | `disk.nix` | 磁盘布局：disko 或原生 `fileSystems` |
+| 4 | `network.nix` | 网络配置 |
+
+- 加载顺序固定，与文件系统读取次序无关；主机 magic 文件紧跟在自动发现的 `modules/` 与注册表模块之后注入（`mkSystem`），仅影响 NixOS 侧，不涉及 home-manager 侧。
+- 框架只负责分拣与 import，**不内置、不依赖** disko / nixos-hardware；需要时在用户 `flake.nix` 中添加相应 input 并在 `disk.nix` / `hardware.nix` 中使用。
+- 主机目录内的其他 `.nix` 文件**不会**被自动导入，发现阶段输出 trace 警告；如需使用请在主机模块中自行 `import`。
+- `snowveil-discovery` 报告的 `hostFiles` 字段按主机名列出实际加载的 magic 文件名（按加载顺序）。
+
 ### Output 映射
 
 ```
 hosts/<name>/default.nix            →  nixosConfigurations.<name>
+hosts/<name>/hardware.nix           →  可选，存在则随主机自动 import（加载顺序 2）
+hosts/<name>/disk.nix               →  可选，存在则随主机自动 import（加载顺序 3）
+hosts/<name>/network.nix            →  可选，存在则随主机自动 import（加载顺序 4）
 hosts/<name>/meta.nix               →  （仅元数据，必须含 system，不生成 output）
 ```
 
@@ -442,7 +461,7 @@ lib/<name>.nix  →  lib.<name>
 mkFlake 调用
 │
 ├─ [1] 读取 lib/discover.nix（发现阶段，纯属性集，不求值 config）
-│       ├── hosts/       → discovered.hosts      [ { name, system, path, meta } ]
+│       ├── hosts/       → discovered.hosts      [ { name, system, path, modulePaths, meta } ]
 │       ├── users/       → discovered.users      [ { name, metaPath, defaultPath, hosts } ]
 │       ├── homes/       → discovered.homes      [ { user, hosts } ]
 │       ├── modules/     → discovered.localGroupedModules / localAutoModules
@@ -485,10 +504,10 @@ mkFlake 调用
 
 ---
 
-*本规范版本：v1。实现位置：`lib/discover.nix`、`lib/fs.nix`、`lib/host.nix`、`lib/default.nix`。*
+*本规范版本：v1.2。实现位置：`lib/discover.nix`、`lib/fs.nix`、`lib/host.nix`、`lib/default.nix`。*
 
 ## Discovery 报告契约
 
-`checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.1"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
+`checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.2"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。`hostFiles` 为主机名到实际加载的主机目录 magic 文件列表（按加载顺序）的映射。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
 
 发现阶段同时维护 `hostsByName`、`usersByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 users/homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。

@@ -6,18 +6,21 @@
 
 ```
 hosts/
-├── nixos-desktop.x86_64-linux/
+├── nixos-desktop/
+│   ├── meta.nix
+│   ├── default.nix
+│   ├── hardware.nix      # 可选：硬件相关配置，自动 import
+│   ├── disk.nix          # 可选：disko 或原生 fileSystems，自动 import
+│   └── network.nix       # 可选：网络配置，自动 import
+├── nixos-server/
 │   ├── meta.nix
 │   └── default.nix
-├── nixos-server.x86_64-linux/
-│   ├── meta.nix
-│   └── default.nix
-└── arm-device.aarch64-linux/
+└── arm-device/
     ├── meta.nix
     └── default.nix
 ```
 
-每个子目录必须带有 `.<system>` 后缀（`lib.systems.flakeExposed` 中的已知架构）。框架自动生成：
+每个主机目录必须在 `meta.nix` 中声明 `system`（`lib.systems.flakeExposed` 中的已知架构）。框架自动生成：
 
 ```
 nixosConfigurations.nixos-desktop
@@ -62,6 +65,35 @@ nixosConfigurations.arm-device
   # 可以在这里直接引用 config 的其他属性
 }
 ```
+
+## 主机目录的 magic 文件（hardware / disk / network）
+
+真实仓库的主机配置几乎总会包含硬件、磁盘、网络碎片。主机目录支持固定分拣的可选 magic 文件，**存在则按固定顺序自动 import，缺失即跳过**，不必全部堆进 `default.nix`：
+
+```
+hosts/nixos-desktop/
+├── meta.nix        # 元数据（必须声明 system，不作为模块加载）
+├── default.nix     # 必需：主机意图（主机名、时区、想启用的服务）
+├── hardware.nix    # 可选：硬件相关配置（可在此 import nixos-hardware）
+├── disk.nix        # 可选：disko 或原生 fileSystems
+└── network.nix     # 可选：网络配置
+```
+
+加载顺序固定为 `default.nix → hardware.nix → disk.nix → network.nix`，与文件系统读取次序无关。这与 `modules/` 树的 `options.nix` / `default.nix` / `nixos.nix` / `home.nix` 是同一套思路：框架只负责「存在则按固定顺序 import」，**不内置、不依赖** disko / nixos-hardware；需要时在 `flake.nix` 中添加相应 input，再在 `disk.nix` / `hardware.nix` 中使用。
+
+```nix
+# hosts/nixos-desktop/disk.nix
+{ inputs, ... }:
+{
+  imports = [ inputs.disko.nixosModules.disko ];
+  disko.devices.disk.main = {
+    device = "/dev/nvme0n1";
+    # ...
+  };
+}
+```
+
+主机目录内的其他 `.nix` 文件不会被自动导入（发现阶段输出 trace 警告）；如需使用请在主机模块中自行 `import`。
 
 ## 多主机共享配置
 

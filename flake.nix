@@ -749,6 +749,19 @@
             test "${exampleHost.config.environment.variables.SNOWVEIL_HOST_CONFIG_ARG}" = "nixos-desktop"
             printf '%s\n' "${exampleHost.config.environment.variables.SNOWVEIL_EXAMPLE}" > "$out"
           '';
+          hostfragments = pkgs.runCommand "snowveil-host-fragments" { nativeBuildInputs = [ pkgs.jq ]; } ''
+            test "${exampleHost.config.environment.variables.SNOWVEIL_HOST_HARDWARE}" = "1"
+            test "${exampleHost.config.environment.variables.SNOWVEIL_HOST_DISK}" = "1"
+            test "${exampleHost.config.networking.hostName}" = "nixos-desktop"
+            report=${exampleDiscoveryReport}
+            ${pkgs.jq}/bin/jq -e '.hostFiles."nixos-desktop" == ["default.nix","hardware.nix","disk.nix","network.nix"]' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.hostFiles."hm-standalone" == ["default.nix"]' "$report" >/dev/null
+            if [ -n "${exampleStandaloneHost.config.environment.variables.SNOWVEIL_HOST_HARDWARE or ""}" ]; then
+              echo "hm-standalone 未声明 hardware.nix，fragment 却泄漏到了该主机" >&2
+              exit 1
+            fi
+            printf '%s\n' ok > "$out"
+          '';
           extensions = pkgs.runCommand "snowveil-extensions" { } ''
             test "${exampleApp.type}" = "app"
             test -n "${exampleApp.program}"

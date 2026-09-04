@@ -8,7 +8,10 @@
 ├── hosts/
 │   ├── nixos-desktop/
 │   │   ├── meta.nix                      # 必须声明 system 和其他角色/策略
-│   │   └── default.nix                   # nixosConfigurations.nixos-desktop
+│   │   ├── default.nix                   # nixosConfigurations.nixos-desktop
+│   │   ├── hardware.nix                  # 可选：硬件配置，存在则自动 import
+│   │   ├── disk.nix                      # 可选：磁盘布局（disko / fileSystems），自动 import
+│   │   └── network.nix                   # 可选：网络配置，存在则自动 import
 │   └── my-host-fqdn/
 │       ├── meta.nix                      # { system = "x86_64-linux"; roles = [...]; }
 │       └── default.nix
@@ -42,6 +45,7 @@
 | 目录 | 生成的 output |
 | ---- | ------------- |
 | `hosts/<name>/default.nix` | `nixosConfigurations.<name>` |
+| `hosts/<name>/{hardware,disk,network}.nix` | 可选：主机目录 magic 文件，存在则按固定顺序随主机自动 import |
 | `hosts/<name>/meta.nix` | 角色与每主机 Home Manager 策略，**必须声明 `system`** |
 | `users/<name>/meta.nix` | 声明用户属性，自动生成 `users.users.<name>` / `users.groups.<name>` |
 | `users/<name>/default.nix` | 可选：`users.users.<name>` 补充模块 |

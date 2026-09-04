@@ -63,7 +63,8 @@ Snowveil 是一个基于 Nix Flakes 的配置框架，用「目录约定 + 自�
 
 ## 目录自动发现规则
 
-- `hosts/` 主机目录**必须**带 `.<system>` 后缀（`hosts/<name>.<system>/default.nix`），不猜测默认架构；key 为去后缀的 `<name>`。
+- `hosts/<name>/` 主机目录使用裸名称，必须在 `meta.nix` 中声明 `system`，不猜测默认架构；key 为完整目录名。
+- 主机目录内固定分拣 magic 文件：`default.nix`（必需，主机意图）与可选的 `hardware.nix` / `disk.nix` / `network.nix`，存在则按此顺序自动 import（允许缺失）；`meta.nix` 仅作为元数据。与模块树的 `options.nix` / `nixos.nix` / `home.nix` 是同一套思路，但框架不内置 disko / nixos-hardware。非 magic 的 `.nix` 文件不会自动导入，仅输出 trace 警告。
 - `homes/<user>/<host>.nix` 声明该 home 关联到某主机（自动推导 `nixosConfigurations.<host>` 的 `snowveil.users`，无需在 host 中手写）；`homes/<user>/default.nix` 为用户共享 home。
 - `modules/` 单树递归收集四个 magic 文件：`options.nix`（接口声明，始终注入）、`default.nix`（中性共享实现）、`nixos.nix`（NixOS 专属实现）、`home.nix`（home-manager 专属实现）。
   - NixOS side load order：`options.nix` → `default.nix` → `nixos.nix`

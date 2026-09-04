@@ -272,4 +272,4 @@ snowveil.projectSource
 
 ## 分层入口
 
-`mkFlake` 覆盖常规场景，`mkSystem` / `mkHome` 作为细粒度逃生舱。新配置应在 `hosts/<name>.<system>/meta.nix` 声明角色和 Home Manager 策略；旧的 host module 顶层 `role` / `roles` 等元数据仍兼容。
+`mkFlake` 覆盖常规场景，`mkSystem` / `mkHome` 作为细粒度逃生舱。新配置应在 `hosts/<name>/meta.nix` 声明角色和 Home Manager 策略（`system` 必填）；主机目录可选识别 `hardware.nix` / `disk.nix` / `network.nix`，存在则随 `default.nix` 按固定顺序自动 import。旧的 host module 顶层 `role` / `roles` 等元数据仍兼容。

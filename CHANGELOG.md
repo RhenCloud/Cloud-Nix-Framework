@@ -8,6 +8,7 @@
 
 ### 新增
 
+- 主机目录 magic 文件分拣：`hosts/<name>/` 除必需的 `default.nix`（主机意图）与元数据 `meta.nix` 外，可选识别 `hardware.nix` / `disk.nix` / `network.nix`，存在则按 `default.nix → hardware.nix → disk.nix → network.nix` 固定顺序自动 import，缺失即跳过；框架不内置 disko / nixos-hardware。非 magic 的 `.nix` 文件不会自动导入，仅输出 trace 警告。`snowveil-discovery` 报告新增 `hostFiles` 字段（discoverySpecVersion 1.1 → 1.2）。
 - 模块依赖系统：模块目录可通过 `meta.nix` 声明 `requires`、`after`、`before`、`wants`、`conflicts` 与分侧开关。
 - Discovery 阶段建立 NixOS / home-manager 独立 module graph，支持未知引用、自引用、矛盾与循环校验。
 - Composition 阶段按主机执行硬依赖、冲突校验和稳定拓扑排序；`snowveil-discovery` 报告增加 `moduleGraph` 与 `perHost`。

@@ -64,7 +64,7 @@ lib/
 6. embedModule（home-manager NixOS 模块，仅当启用嵌入且关联 home 的 users != []）
 7. 自动发现的 modules/（按角色过滤后进行稳定拓扑排序）
 8. moduleRegistries 中的外部模块
-9. 主机自身的 default.nix
+9. 主机目录 magic 文件（固定顺序：default.nix → hardware.nix → disk.nix → network.nix，后三者存在则加载）
 10. mkFlake 的 nixos.modules / mkSystem 的 extraModules
 11. mkSystem 的 extraNixosModules
 ```

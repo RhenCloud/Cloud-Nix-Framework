@@ -385,7 +385,6 @@ let
               }
             else
               _pkgs;
-          hostModule = hostRecord.path;
           specialArgs = specialArgsFor extraSpecialArgs;
           homeSpecialArgs = specialArgsFor extraHomeSpecialArgs;
           hostUsers = usersForHost host;
@@ -414,7 +413,7 @@ let
             };
           };
 
-          hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ [ hostModule ];
+          hostModules = plan.nixos.paths ++ discovered.registryModules.nixos ++ hostRecord.modulePaths;
 
           userDefaultsModule = userTools.mkUsersModule {
             users = map (u: {
@@ -1215,10 +1214,15 @@ let
                   { };
               report = {
                 schemaVersion = 1;
-                discoverySpecVersion = "1.1";
+                discoverySpecVersion = "1.2";
                 frameworkVersion = version.string;
                 system = sys;
                 hosts = discoveredHosts;
+                hostFiles = builtins.listToAttrs (
+                  map (
+                    hostRecord: lib.nameValuePair hostRecord.name (map baseNameOf hostRecord.modulePaths)
+                  ) discovered.hosts
+                );
                 homes = discoveredHomes;
                 packages = discoveredPkgs;
                 apps = discoveredApps;

@@ -1,10 +1,11 @@
 # discover.nix — 目录自动发现
 #
-# 主机目录支持两种约定：
-#   hosts/<name>.<system>/          后缀必须是 lib.systems.flakeExposed 中的已知 system
-#   hosts/<name>/                   无后缀，但 meta.nix 须声明 system = "..."
+# 主机目录约定：
+#   hosts/<name>/                 meta.nix 必须声明 system = "..."
 #
-# 两种写法可共存；不满足任一条件的目录输出 trace 警告并跳过，不会 throw。
+# 主机目录内固定分拣 magic 文件（存在则按此顺序 import，允许缺失）：
+#   default.nix（必需）→ hardware.nix → disk.nix → network.nix
+# meta.nix 只作为元数据读取；其余 .nix 文件不会自动导入（输出 trace 警告）。
 {
   lib,
   fs,
@@ -50,21 +51,47 @@ let
         )
       );
 
+  hostFragmentFiles = [
+    "hardware.nix"
+    "disk.nix"
+    "network.nix"
+  ];
+
   parseHostDir =
     e:
     let
       rawName = e.name;
-      metaPath = projectRoot + "/hosts/" + rawName + "/meta.nix";
-      defPath = projectRoot + "/hosts/" + rawName + "/default.nix";
+      relDir = "hosts/" + rawName;
+      metaPath = projectRoot + "/${relDir}/meta.nix";
+      defPath = projectRoot + "/${relDir}/default.nix";
       meta = readMetadata metaPath;
+      fragmentPaths = lib.filter builtins.pathExists (
+        map (name: projectRoot + "/${relDir}/${name}") hostFragmentFiles
+      );
+      knownFiles = lib.genAttrs (
+        [
+          "meta.nix"
+          "default.nix"
+        ]
+        ++ hostFragmentFiles
+      ) (_: true);
+      strayFiles = map (f: f.name) (
+        lib.filter (f: !builtins.hasAttr f.name knownFiles) (nixFiles (listDirAt relDir))
+      );
+      withStrayWarning =
+        if strayFiles == [ ] then
+          lib.id
+        else
+          builtins.trace "警告：hosts/${rawName}/ 中的 ${lib.concatStringsSep "、" strayFiles} 不是主机 magic 文件，不会被自动导入；如需使用请在主机模块中自行 import";
     in
     if !builtins.pathExists defPath then
       null
     else
-      {
+      withStrayWarning {
         dir = rawName;
         name = rawName;
         path = defPath;
+        modulePaths = [ defPath ] ++ fragmentPaths;
         inherit metaPath;
         inherit meta;
         system =
