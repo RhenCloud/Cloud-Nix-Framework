@@ -36,6 +36,9 @@ inputs.snowveil.lib.mkFlake {
     extra = { };         # 附加 outputs
     disabled = [ ];      # 禁用指定 output
     expected = { };      # 期望发现的 output（校验用）
+    homes = {
+      standalone = true;  # 是否为独立 HM 应用程序生成独立配置; false 仅保留 per-host 配置
+    };
     eval = {
       hosts = false;
       homes = false;
@@ -150,6 +153,21 @@ outputs.disabled = {
   packages = [ "some-package" ];
 };
 ```
+
+`outputs.homes.standalone` 控制是否生成独立 home-manager 配置（用户级别，不关联特定主机）：
+
+```nix
+# 默认：true（向后兼容）— 同时生成 user 与 user@host
+outputs.homes.standalone = true;  # homeConfigurations = { user = ...; user@host = ...; }
+
+# 禁用：false — 仅生成 user@host（适合只使用嵌入式 HM 的项目）
+outputs.homes.standalone = false; # homeConfigurations = { user@host = ...; }
+```
+
+用途：
+- 减少 `nix flake show` 的输出噪音（仅嵌入式 HM 的项目）
+- 加速评估（省去独立 HM 配置的编译）
+- 对已有配置无影响（嵌入式 HM 独立生成）
 
 ## `mkSystem`
 
