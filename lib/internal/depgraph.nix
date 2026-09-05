@@ -443,7 +443,7 @@ let
         details = lib.concatMapStringsSep "\n" (
           item:
           let
-            reason = disabledReasons.${item.dependency} or "未被角色过滤选中";
+            reason = disabledReasons.${item.dependency} or "not selected by role filter";
           in
           "  - '${item.name}' 依赖 '${item.dependency}'，但后者未启用（${reason}）"
         ) missing;

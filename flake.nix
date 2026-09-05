@@ -1,5 +1,5 @@
 {
-  description = "Snowveil：基于 Nix Flakes 的配置框架";
+  description = "Snowveil: A Nix Flakes-based configuration framework";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -29,7 +29,7 @@
       templates = {
         default = {
           path = ./templates/default;
-          description = "Snowveil 最小可用模板";
+          description = "Snowveil minimal working template";
         };
       };
 
@@ -68,7 +68,7 @@
               assertions = [
                 {
                   assertion = !(args ? snowveilHomeOnly);
-                  message = "home.specialArgs 泄漏到了 NixOS module";
+                  message = "home.specialArgs leaked into NixOS module";
                 }
               ];
               environment.sessionVariables.SNOWVEIL_NIXOS_SPECIAL_ARG = snowveilNixosOnly;
@@ -312,7 +312,7 @@
                 "b"
                 "c"
               ];
-              target = "测试夹具";
+              target = "test fixture";
             }).order == [
               "c"
               "b"
@@ -336,7 +336,7 @@
                 "wayland"
                 "xorg"
               ];
-              target = "测试夹具";
+              target = "test fixture";
             }).order == [
               "wayland"
               "xorg"
@@ -386,7 +386,7 @@
               (dependencyGraph.resolve {
                 inherit graph;
                 enabled = [ "a" ];
-                target = "测试夹具";
+                target = "test fixture";
               }).order
               true
           );
@@ -460,7 +460,7 @@
               (dependencyGraph.resolve {
                 inherit graph;
                 enabled = [ "a" ];
-                target = "测试夹具";
+                target = "test fixture";
               }).order
               true
           );
@@ -482,7 +482,7 @@
                   "a"
                   "b"
                 ];
-                target = "测试夹具";
+                target = "test fixture";
               }).order
               true
           );
@@ -496,7 +496,7 @@
               "a"
               "b"
             ];
-            source = "测试夹具";
+            source = "test fixture";
           } == {
             nixos = [
               "a"
@@ -514,7 +514,7 @@
               common = [ "a" ];
               nixos = [ "b" ];
             };
-            source = "测试夹具";
+            source = "test fixture";
           } == {
             nixos = [
               "a"
@@ -525,7 +525,7 @@
         knownMembersPass =
           profileTools.checkMembers {
             profile = "workstation";
-            source = "测试夹具";
+            source = "test fixture";
             side = "nixos";
             members = [ "a" ];
             knownNames = [
@@ -546,41 +546,41 @@
           profileTools.readProfile {
             name = "workstation";
             value = 1;
-            source = "测试夹具";
+            source = "test fixture";
           }
         );
         emptyList = builtins.tryEval (
           profileTools.readProfile {
             name = "workstation";
             value = [ ];
-            source = "测试夹具";
+            source = "test fixture";
           }
         );
         emptyAttrset = builtins.tryEval (
           profileTools.readProfile {
             name = "workstation";
             value = { };
-            source = "测试夹具";
+            source = "test fixture";
           }
         );
         unknownField = builtins.tryEval (
           profileTools.readProfile {
             name = "workstation";
             value.bogus = [ "a" ];
-            source = "测试夹具";
+            source = "test fixture";
           }
         );
         nonStringMember = builtins.tryEval (
           profileTools.readProfile {
             name = "workstation";
             value = [ 1 ];
-            source = "测试夹具";
+            source = "test fixture";
           }
         );
         unknownMember = builtins.tryEval (
           profileTools.checkMembers {
             profile = "workstation";
-            source = "测试夹具";
+            source = "test fixture";
             side = "nixos";
             members = [ "missing" ];
             knownNames = [ "a" ];
@@ -705,7 +705,7 @@
             if [ "${
               if builtins.hasAttr "home-manager" exampleNoEmbedHost.options then "yes" else "no"
             }" = "yes" ]; then
-              echo "embedHomeManager = false 时仍注入了 home-manager 模块" >&2
+              echo "home-manager module still injected when embedHomeManager = false" >&2
               exit 1
             fi
             printf '%s\n' "${exampleNoEmbedHome.config.home.username}" > "$out"
@@ -715,13 +715,13 @@
             if [ "${
               if builtins.hasAttr "home-manager" exampleStandaloneHost.options then "yes" else "no"
             }" = "yes" ]; then
-              echo "host meta 禁用嵌入后仍注入了 home-manager 模块" >&2
+              echo "home-manager module still injected after host meta disabled embed" >&2
               exit 1
             fi
             if [ "${
               if builtins.hasAttr "home-manager" examplePolicyHost.options then "yes" else "no"
             }" = "yes" ]; then
-              echo "per-host home.embed 策略未生效" >&2
+              echo "per-host home.embed policy did not take effect" >&2
               exit 1
             fi
             test "${exampleStandaloneHome.config.home.sessionVariables.SNOWVEIL_STANDALONE}" = "1"
@@ -737,7 +737,7 @@
             if [ "${
               if builtins.hasAttr "disabled-by-meta" exampleFlake.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "meta.enable = false 的 package 仍被输出" >&2
+              echo "package with meta.enable = false was still exported" >&2
               exit 1
             fi
             if [ "${if sys == "x86_64-linux" then "yes" else "no"}" = "yes" ]; then
@@ -753,12 +753,12 @@
             elif [ "${
               if builtins.hasAttr "system-layout" exampleFlake.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "system-first package 出现在错误架构" >&2
+              echo "system-first package appeared under the wrong architecture" >&2
               exit 1
             elif [ "${
               if builtins.hasAttr "legacy-only" exampleFlake.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "旧式 system 后缀 package 出现在错误架构" >&2
+              echo "legacy system-suffixed package appeared under the wrong architecture" >&2
               exit 1
             fi
             if [ "${
@@ -767,19 +767,19 @@
               else
                 "no"
             }" = "yes" ]; then
-              echo "未启用的旧式 system 后缀被误识别为完整包名" >&2
+              echo "unactivated legacy system suffix was misidentified as a full package name" >&2
               exit 1
             fi
             if [ "${
               if builtins.hasAttr "overlay-consumer" exampleFlakeDisabled.packages.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "outputs.disabled 未禁用 package" >&2
+              echo "outputs.disabled did not disable package" >&2
               exit 1
             fi
             if [ "${
               if builtins.hasAttr "example" exampleFlakeDisabled.checks.${sys} then "yes" else "no"
             }" = "yes" ]; then
-              echo "outputs.disabled 未禁用 check" >&2
+              echo "outputs.disabled did not disable check" >&2
               exit 1
             fi
             if [ "${
@@ -791,15 +791,15 @@
               else
                 "no"
             }" = "yes" ]; then
-              echo "outputs.disabled 未禁用 app" >&2
+              echo "outputs.disabled did not disable app" >&2
               exit 1
             fi
             if [ "${if builtins.hasAttr "formatter" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
-              echo "outputs.disabled 未禁用 formatter" >&2
+              echo "outputs.disabled did not disable formatter" >&2
               exit 1
             fi
             if [ "${if builtins.hasAttr "deploy" exampleFlakeDisabled then "yes" else "no"}" = "yes" ]; then
-              echo "outputs.disabled 未禁用 deploy" >&2
+              echo "outputs.disabled did not disable deploy" >&2
               exit 1
             fi
             printf '%s\n' "${exampleDottedPkg.name}" > "$out"
@@ -833,7 +833,7 @@
             if [ "${
               if lib.all (result: result) (builtins.attrValues dependencySuccessChecks) then "yes" else "no"
             }" != "yes" ]; then
-              echo "模块依赖正例未按预期解析" >&2
+              echo "module dependency success cases did not resolve as expected" >&2
               exit 1
             fi
             if [ "${
@@ -842,7 +842,7 @@
               else
                 "no"
             }" != "yes" ]; then
-              echo "模块依赖负例未按预期失败" >&2
+              echo "module dependency failure cases did not fail as expected" >&2
               exit 1
             fi
             cp "$report" "$out"
@@ -850,15 +850,15 @@
           rolefilter = pkgs.runCommand "snowveil-rolefilter" { } ''
 
             if [ -n "${exampleHost.config.environment.variables.SNOWVEIL_SERVER or ""}" ]; then
-              echo "server 角色模块应被过滤掉，但未" >&2
+              echo "server role module should have been filtered out, but was not" >&2
               exit 1
             fi
             if [ -z "${exampleHost.config.environment.variables.SNOWVEIL_COMMON or ""}" ]; then
-              echo "_common 共享模块应始终注入，但未" >&2
+              echo "_common shared module should always be injected, but was not" >&2
               exit 1
             fi
             if [ -z "${exampleHost.config.environment.variables.SNOWVEIL_DEVELOPMENT or ""}" ]; then
-              echo "development 组合角色模块应注入，但未" >&2
+              echo "development composite-role module should be injected, but was not" >&2
               exit 1
             fi
             test "${exampleHost.config.environment.variables.SNOWVEIL_HOST_CONFIG_ARG}" = "nixos-desktop"
@@ -872,7 +872,7 @@
             ${pkgs.jq}/bin/jq -e '.hostFiles."nixos-desktop" == ["default.nix","hardware.nix","disk.nix","network.nix"]' "$report" >/dev/null
             ${pkgs.jq}/bin/jq -e '.hostFiles."hm-standalone" == ["default.nix"]' "$report" >/dev/null
             if [ -n "${exampleStandaloneHost.config.environment.variables.SNOWVEIL_HOST_HARDWARE or ""}" ]; then
-              echo "hm-standalone 未声明 hardware.nix，fragment 却泄漏到了该主机" >&2
+              echo "hm-standalone did not declare hardware.nix, yet the fragment leaked into that host" >&2
               exit 1
             fi
             printf '%s\n' ok > "$out"
@@ -884,19 +884,19 @@
             if [ -n "${
               exampleStandaloneHost.config.environment.variables.SNOWVEIL_PROFILE_PODMAN or ""
             }" ]; then
-              echo "modules 覆盖应禁用 profile 成员，但 workstation.podman 仍被加载" >&2
+              echo "modules override should disable profile members, but workstation.podman was still loaded" >&2
               exit 1
             fi
             if [ -n "${
               exampleStandaloneHost.config.environment.variables.SNOWVEIL_PROFILE_GITCONFIG_NIXOS or ""
             }" ]; then
-              echo "hm-standalone 未声明 personal profile，workstation.gitconfig 却泄漏" >&2
+              echo "hm-standalone did not declare the personal profile, yet workstation.gitconfig leaked in" >&2
               exit 1
             fi
             if [ -n "${
               exampleStandaloneHome.config.home.sessionVariables.SNOWVEIL_PROFILE_GITCONFIG or ""
             }" ]; then
-              echo "hm-standalone 未声明 personal profile，home 侧模块却泄漏" >&2
+              echo "hm-standalone did not declare the personal profile, yet home-side modules leaked in" >&2
               exit 1
             fi
             report=${exampleDiscoveryReport}
@@ -906,17 +906,17 @@
             ${pkgs.jq}/bin/jq -e '.profiles.personal.nixos == ["workstation.gitconfig"] and .profiles.personal.home == ["workstation.gitconfig"]' "$report" >/dev/null
             ${pkgs.jq}/bin/jq -e '.hostProfiles."nixos-desktop" == ["workstation","personal"]' "$report" >/dev/null
             ${pkgs.jq}/bin/jq -e '.hostProfiles."hm-standalone" == ["workstation"]' "$report" >/dev/null
-            ${pkgs.jq}/bin/jq -e '.perHost."hm-standalone".nixos.disabledReasons."workstation.podman" == "被主机模块覆盖显式禁用"' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.perHost."hm-standalone".nixos.disabledReasons."workstation.podman" == "explicitly disabled by host module override"' "$report" >/dev/null
             if [ "${
               if lib.all (result: result) (builtins.attrValues profileSuccessChecks) then "yes" else "no"
             }" != "yes" ]; then
-              echo "profile 正例未按预期解析" >&2
+              echo "profile success cases did not resolve as expected" >&2
               exit 1
             fi
             if [ "${
               if lib.all (result: !result.success) (builtins.attrValues profileFailureChecks) then "yes" else "no"
             }" != "yes" ]; then
-              echo "profile 负例未按预期失败" >&2
+              echo "profile failure cases did not fail as expected" >&2
               exit 1
             fi
             printf '%s\n' ok > "$out"
@@ -957,10 +957,10 @@
             names="${builtins.concatStringsSep " " (builtins.attrNames exampleFlake.nixosModules)}"
             case " $names " in
               *" desktop.example "*) ;;
-              *) echo "nixosModules 缺少目录级键 desktop.example" >&2; exit 1 ;;
+              *) echo "nixosModules is missing directory-level key desktop.example" >&2; exit 1 ;;
             esac
             case " $names " in
-              *" desktop.example.nixos.nix "*) echo "nixosModules 仍暴露 magic 文件名" >&2; exit 1 ;;
+              *" desktop.example.nixos.nix "*) echo "nixosModules still exposes the magic file name" >&2; exit 1 ;;
               *) ;;
             esac
             printf '%s\n' "$names" > "$out"
@@ -1002,7 +1002,7 @@
           '';
           examplereal = pkgs.runCommand "snowveil-example-real" { } ''
             if [ -z "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" ]; then
-              echo "examples/basic 入口错误：未生成 nixosConfigurations（应为 inputs.snowveil.lib.mkFlake）" >&2
+              echo "examples/basic entry is wrong: no nixosConfigurations were generated (should be inputs.snowveil.lib.mkFlake)" >&2
               exit 1
             fi
             printf '%s\n' "${toString (builtins.attrNames exampleBasicReal.nixosConfigurations)}" > "$out"
@@ -1072,7 +1072,7 @@
         formatter
         options
         ;
-      
+
       # Framework contract: known flake output schema
       # Reduces "unknown flake output" warnings from Nix tools
       # Defines all standard outputs for Snowveil meta flake and generated user flakes
