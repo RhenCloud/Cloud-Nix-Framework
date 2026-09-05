@@ -68,7 +68,7 @@ let
       if builtins.isAttrs value && !builtins.isFunction value then
         value
       else
-        throw "元数据文件 '${toString path}' 必须直接返回属性集";
+        throw "metadata file '${toString path}' must directly return an attribute set";
 
   groupModules =
     dir:
@@ -122,7 +122,7 @@ let
         checkedFolders =
           if collisions != { } then
             throw ''
-              error: module discovery detected name collisions
+              module discovery detected name collisions
 
               the following module names are defined in multiple directories:
               ${collisionDetails}

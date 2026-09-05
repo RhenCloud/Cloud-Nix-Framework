@@ -17,10 +17,10 @@ let
       lib.unique value
     else
       throw ''
-        error: 模块依赖元数据无效
+        invalid module dependency metadata
 
-        ${toString metaPath} 中的 '${field}' 必须是非空字符串组成的列表
-        当前类型：${builtins.typeOf value}
+        '${field}' in ${toString metaPath} must be a list of non-empty strings
+        current type: ${builtins.typeOf value}
       '';
 
   readGroupMembers =
@@ -30,7 +30,7 @@ let
       side,
     }:
     if name == "" then
-      throw "moduleGroups 的名称必须是非空字符串"
+      throw "moduleGroups: name must be a non-empty string"
     else if builtins.isList value then
       let
         members = readStringList {
@@ -39,7 +39,7 @@ let
           inherit value;
         };
       in
-      if members == [ ] then throw "moduleGroups.${name} 不能为空" else members
+      if members == [ ] then throw "moduleGroups.${name} must not be empty" else members
     else if builtins.isAttrs value then
       let
         supportedFieldsSet = {
@@ -69,16 +69,16 @@ let
         sideMembers = if side == "nixos" then nixos else home;
       in
       if unknownFields != [ ] then
-        throw "moduleGroups.${name} 包含不支持的字段：${lib.concatStringsSep ", " unknownFields}"
+        throw "moduleGroups.${name} contains unsupported fields: ${lib.concatStringsSep ", " unknownFields}"
       else if allMembers == [ ] then
-        throw "moduleGroups.${name} 不能为空"
+        throw "moduleGroups.${name} must not be empty"
       else
         lib.unique (common ++ sideMembers)
     else
       throw ''
-        error: 模块组定义无效
+        invalid module group definition
 
-        moduleGroups.${name} 必须是字符串列表或包含 common/nixos/home 的属性集
+        moduleGroups.${name} must be either a list of strings or an attrset with common/nixos/home fields
       '';
 
   topologicalOrder =
@@ -137,11 +137,11 @@ let
             cycle = findCycle indegree;
           in
           throw ''
-            error: 检测到模块循环依赖（${side} 侧）
+            module dependency cycle detected (${side} side)
 
               ${lib.concatStringsSep " -> " cycle}
 
-            提示：移除其中一个顺序约束，或将共享选项移动到公共模块
+            hint: remove one of the ordering constraints, or move shared options into a common module
           ''
         else
           let
@@ -166,7 +166,7 @@ let
       sideModules = grouped.${side};
       groups =
         if !builtins.isAttrs moduleGroups then
-          throw "moduleGroups 必须是属性集"
+          throw "moduleGroups must be an attrset"
         else
           lib.mapAttrs (
             name: value:
@@ -190,9 +190,9 @@ let
                 sideRaw
               else
                 throw ''
-                  error: 模块依赖元数据无效
+                  invalid module dependency metadata
 
-                  ${toString metadata.path} 中的 '${side}' 必须是属性集
+                  '${side}' in ${toString metadata.path} must be an attrset
                 '';
             enableValue = sideConfig.enable or true;
             enabled =
@@ -200,9 +200,9 @@ let
                 enableValue
               else
                 throw ''
-                  error: 模块依赖元数据无效
+                  invalid module dependency metadata
 
-                  ${toString metadata.path} 中的 '${side}.enable' 必须是布尔值
+                  '${side}.enable' in ${toString metadata.path} must be a boolean
                 '';
             field =
               key:
@@ -227,9 +227,9 @@ let
             null
           else if unknownGroups != [ ] then
             throw ''
-              error: 模块引用了未知模块组（${side} 侧）
+              module references an unknown module group (${side} side)
 
-                '${name}' 引用了：${lib.concatStringsSep ", " unknownGroups}
+                '${name}' references: ${lib.concatStringsSep ", " unknownGroups}
             ''
           else
             {
@@ -308,35 +308,35 @@ let
         if unknown != [ ] then
           let
             details = lib.concatMapStringsSep "\n" (
-              ref: "  - '${ref.name}' 通过 ${ref.kind} 引用了未知模块 '${ref.target}'"
+              ref: "  - '${ref.name}' references unknown module '${ref.target}' via ${ref.kind}"
             ) unknown;
           in
           throw ''
-            error: 模块依赖引用了未知模块（${side} 侧）
+            module dependency references an unknown module (${side} side)
 
             ${details}
 
-            提示：请使用由目录路径推导的模块名，并确认目标模块存在于当前侧
+            hint: use the module name derived from its directory path, and make sure the target exists on this side
           ''
         else if selfReferences != [ ] then
           let
             details = lib.concatMapStringsSep "\n" (
-              ref: "  - '${ref.name}' 通过 '${ref.kind}' 引用了自身"
+              ref: "  - '${ref.name}' references itself via '${ref.kind}'"
             ) selfReferences;
           in
           throw ''
-            error: 模块依赖包含自引用（${side} 侧）
+            module dependency contains a self reference (${side} side)
 
             ${details}
           ''
         else if contradictions != [ ] then
           let
             details = lib.concatMapStringsSep "\n" (
-              item: "  - '${item.name}' 同时依赖并冲突于 '${item.target}'"
+              item: "  - '${item.name}' both depends on and conflicts with '${item.target}'"
             ) contradictions;
           in
           throw ''
-            error: 模块依赖元数据相互矛盾（${side} 侧）
+            module dependency metadata contradicts itself (${side} side)
 
             ${details}
           ''
@@ -433,7 +433,7 @@ let
           lib.filter (name: builtins.hasAttr name enabledSet) graph.order
         else
           topologicalOrder {
-            nodes = lib.mapAttrs (name: oa: { orderAfter = oa; }) effectiveOrderAfterMap;
+            nodes = lib.mapAttrs (_: oa: { orderAfter = oa; }) effectiveOrderAfterMap;
             enabled = enabledNames;
             inherit (graph) side;
           };
@@ -445,39 +445,39 @@ let
           let
             reason = disabledReasons.${item.dependency} or "not selected by role filter";
           in
-          "  - '${item.name}' 依赖 '${item.dependency}'，但后者未启用（${reason}）"
+          "  - '${item.name}' depends on '${item.dependency}', which is not enabled (${reason})"
         ) missing;
       in
       throw ''
-        error: ${target} 的模块依赖不完整（${graph.side} 侧）
+        incomplete module dependencies for ${target} (${graph.side} side)
 
         ${details}
 
-        提示：启用所需模块，或移除依赖声明
+        hint: enable the required modules, or remove the dependency declaration
       ''
     else if missingCapabilities != [ ] then
       let
         details = lib.concatMapStringsSep "\n" (
-          item: "  - '${item.name}' 需要能力 '${item.capability}'，但没有已启用的 provider"
+          item: "  - '${item.name}' requires capability '${item.capability}', but no enabled provider offers it"
         ) missingCapabilities;
       in
       throw ''
-        error: ${target} 的模块能力依赖不完整（${graph.side} 侧）
+        incomplete capability dependencies for ${target} (${graph.side} side)
 
         ${details}
       ''
     else if conflicts != [ ] then
       let
         details = lib.concatMapStringsSep "\n" (
-          item: "  - '${item.first}' 与 '${item.second}' 冲突"
+          item: "  - '${item.first}' conflicts with '${item.second}'"
         ) conflicts;
       in
       throw ''
-        error: ${target} 启用了相互冲突的模块（${graph.side} 侧）
+        ${target} enables mutually conflicting modules (${graph.side} side)
 
         ${details}
 
-        提示：禁用其中一个冲突模块
+        hint: disable one of the conflicting modules
       ''
     else
       {

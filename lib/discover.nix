@@ -39,7 +39,7 @@ let
       else if value == null then
         { }
       else
-        throw "元数据文件 '${toString path}' 必须直接返回属性集";
+        throw "metadata file '${toString path}' must directly return an attribute set";
 
   namedOutputsAt =
     dir:
@@ -86,7 +86,7 @@ let
         if strayFiles == [ ] then
           lib.id
         else
-          builtins.trace "警告：hosts/${rawName}/ 中的 ${lib.concatStringsSep "、" strayFiles} 不是主机 magic 文件，不会被自动导入；如需使用请在主机模块中自行 import";
+          builtins.trace "warning: files ${lib.concatStringsSep ", " strayFiles} under hosts/${rawName}/ are not host magic files and will not be auto-imported; import them explicitly from the host module if needed";
     in
     if !builtins.pathExists defPath then
       null
@@ -103,7 +103,7 @@ let
             sys = meta.system or null;
           in
           if sys == null then
-            builtins.throw "Snowveil 框架错误：hosts/${rawName}/meta.nix 必须声明 system（例如 system = \"x86_64-linux\"）"
+            builtins.throw "hosts/${rawName}/meta.nix must declare system (e.g. system = \"x86_64-linux\")"
           else
             sys;
       };
@@ -153,7 +153,7 @@ let
 
   allProfileDefs =
     if duplicateProfiles != [ ] then
-      throw "profile 名称冲突：${lib.concatStringsSep ", " duplicateProfiles} 同时在 profiles/ 目录与 mkFlake.profiles 中定义，请只保留一处"
+      throw "profile name conflict: ${lib.concatStringsSep ", " duplicateProfiles} defined both in profiles/ and mkFlake.profiles; keep only one"
     else
       fileProfiles
       // lib.mapAttrs (name: value: {
@@ -268,11 +268,11 @@ let
   normalizeHosts =
     user: hosts:
     if hosts == null then
-      throw "Snowveil 框架错误：users/${user}/meta.nix 必须声明 hosts（例如 hosts = [ \"nixos-desktop\" ]）"
+      throw "users/${user}/meta.nix must declare hosts (e.g. hosts = [ \"nixos-desktop\" ])"
     else if !builtins.isList hosts then
-      throw "Snowveil 框架错误：users/${user}/meta.nix 的 hosts 必须是字符串列表"
+      throw "users/${user}/meta.nix hosts must be a list of strings"
     else if !lib.all (host: builtins.isString host) hosts then
-      throw "Snowveil 框架错误：users/${user}/meta.nix 的 hosts 必须是字符串列表"
+      throw "users/${user}/meta.nix hosts must be a list of strings"
     else
       hosts;
 

@@ -20,10 +20,10 @@ let
       lib.unique value
     else
       throw ''
-        error: profile 定义无效
+        invalid profile definition
 
-        ${source} 中的 '${field}' 必须是非空字符串组成的列表
-        当前类型：${builtins.typeOf value}
+        '${field}' in ${source} must be a list of non-empty strings
+        current type: ${builtins.typeOf value}
       '';
 
   readProfile =
@@ -33,7 +33,7 @@ let
       source,
     }:
     if name == "" then
-      throw "profile 的名称必须是非空字符串"
+      throw "profile name must be a non-empty string"
     else if builtins.isList value then
       let
         members = readStringList {
@@ -42,7 +42,7 @@ let
         };
       in
       if members == [ ] then
-        throw "profile '${name}'（${source}）不能为空"
+        throw "profile '${name}' (${source}) must not be empty"
       else
         {
           nixos = members;
@@ -75,9 +75,9 @@ let
         };
       in
       if unknownFields != [ ] then
-        throw "profile '${name}'（${source}）包含不支持的字段：${lib.concatStringsSep ", " unknownFields}"
+        throw "profile '${name}' (${source}) contains unsupported fields: ${lib.concatStringsSep ", " unknownFields}"
       else if common ++ nixos ++ home == [ ] then
-        throw "profile '${name}'（${source}）不能为空"
+        throw "profile '${name}' (${source}) must not be empty"
       else
         {
           nixos = lib.unique (common ++ nixos);
@@ -85,9 +85,9 @@ let
         }
     else
       throw ''
-        error: profile 定义无效
+        invalid profile definition
 
-        profile '${name}'（${source}）必须是字符串列表或包含 common/nixos/home 的属性集
+        profile '${name}' (${source}) must be either a list of strings or an attrset with common/nixos/home fields
       '';
 
   checkMembers =
@@ -106,12 +106,12 @@ let
       members
     else
       throw ''
-        error: profile 引用了未知模块（${side} 侧）
+        profile references unknown module(s) (${side} side)
 
-        profile '${profile}'（${source}）引用了：${lib.concatStringsSep ", " unknown}
+        profile '${profile}' (${source}) references: ${lib.concatStringsSep ", " unknown}
 
-        提示：模块名由目录路径推导（如 desktop.hyprland）；仅某侧存在的模块
-        请使用分侧写法 { nixos = [...]; home = [...]; }
+        hint: module names are derived from directory paths (e.g. desktop.hyprland).
+        For side-specific modules, use the split form { nixos = [...]; home = [...]; }
       '';
 
   checkHostProfiles =
@@ -130,14 +130,14 @@ let
         available = builtins.attrNames knownProfiles;
       in
       throw ''
-        error: 主机 '${host}' 声明了未知 profile
+        host '${host}' declares unknown profile(s)
 
-        未知 profile：${lib.concatStringsSep ", " unknown}
+        unknown profiles: ${lib.concatStringsSep ", " unknown}
         ${
           if available == [ ] then
-            "当前项目没有定义任何 profile（可创建 profiles/<name>.nix 或传入 mkFlake.profiles）"
+            "no profiles are defined in this project (create profiles/<name>.nix or pass mkFlake.profiles)"
           else
-            "可用 profile：${lib.concatStringsSep ", " available}"
+            "available profiles: ${lib.concatStringsSep ", " available}"
         }
       '';
 in

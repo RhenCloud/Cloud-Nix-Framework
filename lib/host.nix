@@ -14,7 +14,7 @@ let
     else if builtins.isList roles && lib.all builtins.isString roles then
       roles
     else
-      throw "主机 role/roles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf roles}";
+      throw "host role/roles must be a string or list of strings, got ${builtins.typeOf roles}";
 
   normalizeProfiles =
     profiles:
@@ -25,7 +25,7 @@ let
     else if builtins.isList profiles && lib.all builtins.isString profiles then
       profiles
     else
-      throw "主机 profiles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf profiles}";
+      throw "host profiles must be a string or list of strings, got ${builtins.typeOf profiles}";
 
   # 读取一个 bool? 字段，支持新旧两种路径
   # newPath: 新推荐路径（如 raw.home.embed）
@@ -43,7 +43,7 @@ let
         if acc != null then
           acc
         else if old.value != null then
-          builtins.trace "警告：meta.nix 字段 '${old.name}' 已弃用，请迁移到 '${old.newName}'" old.value
+          builtins.trace "warning: meta.nix field '${old.name}' is deprecated, migrate to '${old.newName}'" old.value
         else
           null
       ) null oldPaths;
@@ -99,7 +99,7 @@ let
   resolveHost =
     host:
     discovered.hostsByName.${host}
-      or (throw "未发现主机 '${host}'，请创建 hosts/${host}/ 目录并在 meta.nix 中声明 system");
+      or (throw "host '${host}' was not discovered; create hosts/${host}/ and declare system in meta.nix");
 
   hostMetadataFor =
     { host, ... }:
@@ -123,9 +123,12 @@ let
         else if builtins.isAttrs value then
           value.${host} or value.default or default
         else
-          throw "${name} 必须是布尔值、host -> bool 函数或 per-host 属性集";
+          throw "${name} must be a boolean, a host -> bool function, or a per-host attrset";
     in
-    if builtins.isBool resolved then resolved else throw "${name} 为主机 '${host}' 解析出的值必须是布尔值";
+    if builtins.isBool resolved then
+      resolved
+    else
+      throw "${name} resolved to a non-boolean value for host '${host}'";
 
   hostPolicyFromMetadata =
     {
@@ -142,7 +145,7 @@ let
     else if builtins.isBool value then
       value
     else
-      throw "主机 '${host}' 的 ${key} 元数据必须是布尔值";
+      throw "metadata field ${key} for host '${host}' must be a boolean";
 
   rolesFor =
     { host, ... }:

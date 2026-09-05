@@ -239,7 +239,7 @@ let
         side = "home";
         roles = null;
         overrideMap = { };
-        target = "全局 home";
+        target = "global home";
       };
 
       hostPlans = lib.mapAttrs (
@@ -260,7 +260,7 @@ let
               inherit side overrideMap;
               inherit (metadata) roles;
               profileEnabled = profileMembers side;
-              target = "主机 '${host}'";
+              target = "host '${host}'";
             };
         in
         {
@@ -387,7 +387,7 @@ let
               imports = [
                 (
                   if hm == null then
-                    throw "主机 '${host}' 关联了 home（${lib.concatStringsSep ", " hostHomeUsers}），但缺少 home-manager input"
+                    throw "host '${host}' has associated homes (${lib.concatStringsSep ", " hostHomeUsers}) but no home-manager input is available"
                   else
                     hm.nixosModules.home-manager
                 )
@@ -455,7 +455,10 @@ let
         }:
         let
           hmLib =
-            if hm == null then throw "mkHome 需要 home-manager input，请在 flake inputs 中 follows" else hm.lib;
+            if hm == null then
+              throw "mkHome requires a home-manager input; add one to flake inputs"
+            else
+              hm.lib;
           sys =
             if host != null then
               (hostMeta.resolveHost host).system
@@ -589,7 +592,7 @@ let
             else if builtins.isAttrs disabledOutputs then
               lib.mapAttrs (_: names: lib.genAttrs names (_: true)) disabledOutputs
             else
-              throw "disabledOutputs 必须是字符串列表或 output 名到名称列表的属性集";
+              throw "disabledOutputs must be a list of strings or an attrset mapping output names to lists of names";
 
           disabledByName =
             kind: name:
@@ -854,7 +857,10 @@ let
               ) discovered.hosts;
 
               checkedExpectedOutputs =
-                if builtins.isAttrs expectedOutputs then expectedOutputs else throw "outputs.expected 必须是属性集";
+                if builtins.isAttrs expectedOutputs then
+                  expectedOutputs
+                else
+                  throw "outputs.expected must be an attribute set";
               expectedMode = checkedExpectedOutputs.mode or "subset";
               supportedExpectedFields = [
                 "hosts"
@@ -882,9 +888,9 @@ let
                     exact = true;
                   }
                 then
-                  throw "outputs.expected.mode 必须是 \"subset\" 或 \"exact\""
+                  throw "outputs.expected.mode must be \"subset\" or \"exact\""
                 else if unknownExpectedFields != [ ] then
-                  throw "outputs.expected 包含不支持的字段：${lib.concatStringsSep ", " unknownExpectedFields}"
+                  throw "outputs.expected contains unsupported fields: ${lib.concatStringsSep ", " unknownExpectedFields}"
                 else
                   expectedFields;
 
@@ -893,7 +899,7 @@ let
                 if builtins.isList value && lib.all builtins.isString value then
                   lib.unique value
                 else
-                  throw "outputs.expected.${label} 必须是字符串列表";
+                  throw "outputs.expected.${label} must be a list of strings";
               perSystemExpected =
                 kind: value:
                 if builtins.isList value then
@@ -906,11 +912,11 @@ let
                     validated = lib.mapAttrs (system: items: stringList "${kind}.${system}" items) value;
                   in
                   if unknownSystems != [ ] then
-                    throw "outputs.expected.${kind} 包含未配置的 system：${lib.concatStringsSep ", " unknownSystems}"
+                    throw "outputs.expected.${kind} contains unconfigured systems: ${lib.concatStringsSep ", " unknownSystems}"
                   else
                     builtins.deepSeq validated (validated.${sys} or [ ])
                 else
-                  throw "outputs.expected.${kind} 必须是字符串列表或 system 到字符串列表的属性集";
+                  throw "outputs.expected.${kind} must be a list of strings or an attrset mapping systems to lists of strings";
               formatterExpected =
                 value:
                 let
@@ -918,26 +924,26 @@ let
                   unknownSystems = lib.filter (system: !builtins.hasAttr system systemsSet) configured;
                 in
                 if unknownSystems != [ ] then
-                  throw "outputs.expected.formatter 包含未配置的 system：${lib.concatStringsSep ", " unknownSystems}"
+                  throw "outputs.expected.formatter contains unconfigured systems: ${lib.concatStringsSep ", " unknownSystems}"
                 else
                   lib.filter (system: system == sys) configured;
               deployExpected =
                 value:
                 if !builtins.isAttrs value then
-                  throw "outputs.expected.deploy 必须是属性集"
+                  throw "outputs.expected.deploy must be an attribute set"
                 else
                   let
                     present = value.present or false;
                     nodes = stringList "deploy.nodes" (value.nodes or [ ]);
                   in
                   if !builtins.isBool present then
-                    throw "outputs.expected.deploy.present 必须是布尔值"
+                    throw "outputs.expected.deploy.present must be a boolean"
                   else
                     lib.optional present "present" ++ map (name: "nodes.${name}") nodes;
               imagesExpected =
                 value:
                 if !builtins.isAttrs value then
-                  throw "outputs.expected.images 必须是 host 到镜像格式列表的属性集"
+                  throw "outputs.expected.images must be an attrset mapping hosts to lists of image formats"
                 else
                   lib.concatLists (
                     lib.mapAttrsToList (
@@ -1014,11 +1020,11 @@ let
                     missing=${lib.escapeShellArg (builtins.toJSON missing)}
                     unexpected=${lib.escapeShellArg (builtins.toJSON unexpected)}
                     if [ "$missing" != "[]" ]; then
-                      echo "snowveil-discovery: outputs.expected.${kind} 缺少以下项目：" >&2
+                      echo "snowveil-discovery: outputs.expected.${kind} is missing the following entries:" >&2
                       echo "$missing" | ${pkgs.jq}/bin/jq -r '.[]' | sed 's/^/  - /' >&2
                     fi
                     if [ "$unexpected" != "[]" ]; then
-                      echo "snowveil-discovery: outputs.expected.${kind} 包含以下意外项目：" >&2
+                      echo "snowveil-discovery: outputs.expected.${kind} contains the following unexpected entries:" >&2
                       echo "$unexpected" | ${pkgs.jq}/bin/jq -r '.[]' | sed 's/^/  - /' >&2
                     fi
                     if [ "$missing" != "[]" ] || [ "$unexpected" != "[]" ]; then
@@ -1035,7 +1041,7 @@ let
               );
 
               checkedEvalOutputs =
-                if builtins.isAttrs evalOutputs then evalOutputs else throw "outputs.eval 必须是属性集";
+                if builtins.isAttrs evalOutputs then evalOutputs else throw "outputs.eval must be an attribute set";
               evalKeys = builtins.attrNames checkedEvalOutputs;
               invalidEvalKeys = lib.filter (
                 name:
@@ -1059,14 +1065,14 @@ let
                   if unknown == [ ] then
                     selected
                   else
-                    throw "outputs.eval.${kind} 包含未发现的目标：${lib.concatStringsSep ", " unknown}"
+                    throw "outputs.eval.${kind} references undiscovered targets: ${lib.concatStringsSep ", " unknown}"
                 else
-                  throw "outputs.eval.${kind} 必须是布尔值或字符串列表";
+                  throw "outputs.eval.${kind} must be a boolean or a list of strings";
               selectedEvalHosts = evalSelection "hosts" discoveredHosts evalHosts;
               selectedEvalHomes = evalSelection "homes" discoveredHomes evalHomes;
               checkedEval =
                 if invalidEvalKeys != [ ] then
-                  throw "outputs.eval 包含不支持的字段：${lib.concatStringsSep ", " invalidEvalKeys}"
+                  throw "outputs.eval contains unsupported fields: ${lib.concatStringsSep ", " invalidEvalKeys}"
                 else
                   builtins.deepSeq selectedEvalHosts (builtins.deepSeq selectedEvalHomes true);
               selectedEvalHostSet = lib.genAttrs selectedEvalHosts (_: true);
@@ -1110,7 +1116,7 @@ let
                 if builtins.isAttrs diagnosticsOutputs then
                   diagnosticsOutputs
                 else
-                  throw "outputs.diagnostics 必须是属性集";
+                  throw "outputs.diagnostics must be an attribute set";
               diagnosticKeys = builtins.attrNames checkedDiagnosticsOutputs;
               supportedDiagnosticKeys = [
                 "discovery"
@@ -1135,9 +1141,9 @@ let
               ) supportedDiagnosticKeys;
               checkedDiagnostics =
                 if invalidDiagnosticKeys != [ ] then
-                  throw "outputs.diagnostics 包含不支持的字段：${lib.concatStringsSep ", " invalidDiagnosticKeys}"
+                  throw "outputs.diagnostics contains unsupported fields: ${lib.concatStringsSep ", " invalidDiagnosticKeys}"
                 else if invalidDiagnosticValues != [ ] then
-                  throw "outputs.diagnostics 的字段必须是布尔值：${lib.concatStringsSep ", " invalidDiagnosticValues}"
+                  throw "outputs.diagnostics fields must be booleans: ${lib.concatStringsSep ", " invalidDiagnosticValues}"
                 else
                   true;
 
@@ -1281,9 +1287,9 @@ let
             in
             if reservedCollision != null then
               throw ''
-                error: reserved output name
+                reserved output name
 
-                'checks.${reservedCollision}' 使用了框架保留的 snowveil- 前缀
+                'checks.${reservedCollision}' uses the framework-reserved snowveil- prefix
                 hint: use a different name for your check
               ''
             else

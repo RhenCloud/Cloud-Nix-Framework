@@ -31,9 +31,6 @@ let
   applyModuleOverrides =
     { overrides, modules }:
     let
-      # 构建模块名称 → 启用状态的映射
-      overrideMap = overrides;
-
       isModuleEnabled =
         modulePath:
         let
@@ -43,7 +40,7 @@ let
           true
         else
           let
-            override = overrideMap.${moduleName} or null;
+            override = overrides.${moduleName} or null;
           in
           if override == null then true else override;
     in
@@ -53,14 +50,14 @@ let
   validateModuleOverrides =
     overrides:
     if !builtins.isAttrs overrides then
-      throw "meta.nix 中的 modules 必须是属性集，当前类型为 ${builtins.typeOf overrides}"
+      throw "modules in meta.nix must be an attrset, got ${builtins.typeOf overrides}"
     else
       lib.mapAttrs (
         name: value:
         if builtins.isBool value || value == null then
           value
         else
-          throw "modules.${name} 的值必须是布尔值或 null，当前为 ${builtins.typeOf value}"
+          throw "modules.${name} must be a boolean or null, got ${builtins.typeOf value}"
       ) overrides;
 in
 
