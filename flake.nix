@@ -18,7 +18,7 @@
     let
       inherit (nixpkgs) lib;
       snowveil = import ./lib { inherit lib; };
-      schema = import ./lib/schema.nix { inherit lib; };
+      schema = import ./lib/schema.nix { };
       dependencyGraph = import ./lib/internal/depgraph.nix { inherit lib; };
       profileTools = import ./lib/internal/profiles.nix { inherit lib; };
       frameworkInputs = {
