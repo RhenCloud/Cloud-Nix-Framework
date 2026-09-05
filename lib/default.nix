@@ -46,6 +46,7 @@ let
       moduleGroups ? { },
       profiles ? { },
       root ? null,
+      sops ? { },
     }:
     let
       self =
@@ -80,7 +81,8 @@ let
         inherit lib discovered;
       };
 
-      sops' = import ./sops.nix { inherit projectRoot; };
+      sopsLayout = sops.layout or null;
+      sops' = import ./sops.nix { inherit projectRoot sopsLayout; };
       source = sourceTools // {
         clean = args: sourceTools.clean ({ root = projectRoot; } // args);
       };
@@ -1622,6 +1624,7 @@ let
       moduleRegistries = args.moduleRegistries or [ ];
       moduleGroups = args.moduleGroups or { };
       profiles = args.profiles or { };
+      sops = args.sops or { };
     }).mkFlake
       (
         builtins.removeAttrs args [

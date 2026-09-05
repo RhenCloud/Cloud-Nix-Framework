@@ -1,8 +1,22 @@
-{ projectRoot }:
+{
+  projectRoot,
+  sopsLayout ? null,
+}:
+
+let
+  defaultLayout = {
+    commonFile = projectRoot + "/secrets/common.yaml";
+    hostFile = host: projectRoot + "/secrets/hosts/${host}.yaml";
+  };
+  effectiveLayout =
+    if sopsLayout == null then
+      defaultLayout
+    else
+      defaultLayout // sopsLayout;
+in
 
 rec {
-  commonFile = projectRoot + "/secrets/common.yaml";
-  hostFile = host: projectRoot + "/secrets/hosts/${host}.yaml";
+  inherit (effectiveLayout) commonFile hostFile;
   defaultFile = host: if host == null then commonFile else hostFile host;
 
   secret =
