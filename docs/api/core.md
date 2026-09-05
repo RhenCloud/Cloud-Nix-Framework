@@ -276,7 +276,7 @@ snowveil.source.clean {
 snowveil.projectSource
 ```
 
-未绑定的 `inputs.snowveil.lib.source.clean` 要求传入 `root`。由 `mkLib`、模块参数和 output 文件获得的绑定 `snowveil` 默认使用项目根；`projectSource` 使用默认排除项 `.git`、`.direnv`、`.cnh` 和根级 `result`。
+未绑定的 `inputs.snowveil.lib.source.clean` 要求传入 `root`。由 `mkLib`、模块参数和 output 文件获得的绑定 `snowveil` 默认使用项目根；`projectSource` 使用默认排除项 `.git`、`.direnv`、`.snowveil` 和根级 `result`。
 
 ## Output 验证与求值
 

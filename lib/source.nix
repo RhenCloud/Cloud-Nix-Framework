@@ -4,7 +4,7 @@ let
   defaultExcludes = [
     ".git"
     ".direnv"
-    ".cnh"
+    ".snowveil"
     "result"
   ];
 
