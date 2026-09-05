@@ -2,7 +2,7 @@
   description = "Snowveil - Module Overrides Example";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     snowveil.url = "path:../..";
     snowveil.inputs.nixpkgs.follows = "nixpkgs";
   };
