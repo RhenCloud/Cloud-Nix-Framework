@@ -26,8 +26,11 @@
       pr,
       hash,
     }:
-    fetchpatch {
-      url = "https://github.com/${owner}/${repo}/pull/${pr}.patch";
-      inherit hash;
-    };
+    builtins.trace
+      "warning: snowveil.patches.fromPR is deprecated because PR patch URLs change hash on force-push; use snowveil.patches.fromCommit instead"
+      fetchpatch
+      {
+        url = "https://github.com/${owner}/${repo}/pull/${pr}.patch";
+        inherit hash;
+      };
 }
