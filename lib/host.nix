@@ -16,6 +16,17 @@ let
     else
       throw "主机 role/roles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf roles}";
 
+  normalizeProfiles =
+    profiles:
+    if profiles == null then
+      [ ]
+    else if builtins.isString profiles then
+      [ profiles ]
+    else if builtins.isList profiles && lib.all builtins.isString profiles then
+      profiles
+    else
+      throw "主机 profiles 必须是字符串或字符串列表，当前类型为 ${builtins.typeOf profiles}";
+
   # 读取一个 bool? 字段，支持新旧两种路径
   # newPath: 新推荐路径（如 raw.home.embed）
   # oldPaths: 旧路径列表 { value; name; } 带 deprecated 警告
@@ -51,6 +62,7 @@ let
     in
     {
       roles = normalizeRoles (raw.roles or raw.role or null);
+      profiles = normalizeProfiles (raw.profiles or null);
       modules = raw.modules or { };
       embedHomeManager = readBoolField {
         newValue = homeMeta.embed or null;
@@ -140,6 +152,7 @@ in
 {
   inherit
     normalizeRoles
+    normalizeProfiles
     normalizeHostMetadata
     resolveHost
     hostMetadataFor

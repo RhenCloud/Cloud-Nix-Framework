@@ -12,10 +12,12 @@
   projectRoot,
   moduleRegistries,
   moduleGroups ? { },
+  profiles ? { },
 }:
 
 let
   depGraph = import ./internal/depgraph.nix { inherit lib; };
+  profileTools = import ./internal/profiles.nix { inherit lib; };
 
   listDirAt =
     rel:
@@ -34,6 +36,8 @@ let
       in
       if builtins.isAttrs value && !builtins.isFunction value then
         value
+      else if value == null then
+        { }
       else
         throw "元数据文件 '${toString path}' 必须直接返回属性集";
 
@@ -132,6 +136,57 @@ let
     nixos = lib.concatMap (name: localGroupedModules.nixos.${name}) moduleGraph.nixos.order;
     home = lib.concatMap (name: localGroupedModules.home.${name}) moduleGraph.home.order;
   };
+
+  fileProfiles = builtins.listToAttrs (
+    map (
+      file:
+      lib.nameValuePair (lib.removeSuffix ".nix" file.name) {
+        source = "profiles/${file.name}";
+        value = import (projectRoot + "/profiles/" + file.name);
+      }
+    ) (nixFiles (listDirAt "profiles"))
+  );
+
+  duplicateProfiles = lib.intersectLists (builtins.attrNames fileProfiles) (
+    builtins.attrNames profiles
+  );
+
+  allProfileDefs =
+    if duplicateProfiles != [ ] then
+      throw "profile 名称冲突：${lib.concatStringsSep ", " duplicateProfiles} 同时在 profiles/ 目录与 mkFlake.profiles 中定义，请只保留一处"
+    else
+      fileProfiles
+      // lib.mapAttrs (name: value: {
+        source = "mkFlake.profiles.${name}";
+        inherit value;
+      }) profiles;
+
+  profiles' = lib.mapAttrs (
+    name: def:
+    let
+      normalized = profileTools.readProfile {
+        inherit name;
+        inherit (def) source value;
+      };
+    in
+    {
+      inherit (def) source;
+      nixos = profileTools.checkMembers {
+        profile = name;
+        inherit (def) source;
+        side = "nixos";
+        members = normalized.nixos;
+        knownNames = builtins.attrNames moduleGraph.nixos.nodes;
+      };
+      home = profileTools.checkMembers {
+        profile = name;
+        inherit (def) source;
+        side = "home";
+        members = normalized.home;
+        knownNames = builtins.attrNames moduleGraph.home.nodes;
+      };
+    }
+  ) allProfileDefs;
 
   registryModules =
     lib.foldl'
@@ -272,6 +327,8 @@ in
     usersByName
     usersByHost
     ;
+
+  profiles = profiles';
 
   packages = directPackages ++ systemFirstPackages;
 

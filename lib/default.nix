@@ -15,6 +15,7 @@ let
   sourceTools = import ./source.nix { inherit lib; };
   moduleTools = import ./internal/modules.nix { inherit lib; };
   depGraph = import ./internal/depgraph.nix { inherit lib; };
+  profileTools = import ./internal/profiles.nix { inherit lib; };
   userTools = import ./user.nix { inherit lib; };
 
   defaultSystems = [
@@ -106,6 +107,7 @@ let
       inputs,
       moduleRegistries ? [ ],
       moduleGroups ? { },
+      profiles ? { },
       root ? null,
     }:
     let
@@ -133,6 +135,7 @@ let
           projectRoot
           moduleRegistries
           moduleGroups
+          profiles
           ;
       };
 
@@ -237,6 +240,7 @@ let
           side,
           roles,
           overrideMap,
+          profileEnabled ? [ ],
           target,
         }:
         let
@@ -244,6 +248,7 @@ let
           moduleIndex = discovered.localGroupedModules.index;
           sideOnly = if side == "nixos" then "nixosOnly" else "homeOnly";
           rolesSet = if roles == null then null else lib.genAttrs roles (_: true);
+          profileSet = lib.genAttrs profileEnabled (_: true);
           selectedByName = lib.mapAttrs (
             name: node:
             let
@@ -254,7 +259,7 @@ let
             in
             if override == false then
               [ ]
-            else if override == true then
+            else if override == true || builtins.hasAttr name profileSet then
               node.paths
             else
               defaultPaths
@@ -301,17 +306,26 @@ let
         host: record:
         let
           metadata = hostMeta.normalizeHostMetadata record.meta;
+          declaredProfiles = profileTools.checkHostProfiles {
+            inherit host;
+            declared = metadata.profiles;
+            knownProfiles = discovered.profiles;
+          };
+          profileMembers =
+            side: lib.unique (lib.concatMap (profile: discovered.profiles.${profile}.${side}) declaredProfiles);
           overrideMap = moduleTools.validateModuleOverrides metadata.modules;
           select =
             side:
             selectLocalModules {
               inherit side overrideMap;
               inherit (metadata) roles;
+              profileEnabled = profileMembers side;
               target = "主机 '${host}'";
             };
         in
         {
           inherit record metadata overrideMap;
+          profiles = declaredProfiles;
           nixos = select "nixos";
           home = select "home";
         }
@@ -1214,13 +1228,19 @@ let
                   { };
               report = {
                 schemaVersion = 1;
-                discoverySpecVersion = "1.2";
+                discoverySpecVersion = "1.3";
                 frameworkVersion = version.string;
                 system = sys;
                 hosts = discoveredHosts;
                 hostFiles = builtins.listToAttrs (
                   map (
                     hostRecord: lib.nameValuePair hostRecord.name (map baseNameOf hostRecord.modulePaths)
+                  ) discovered.hosts
+                );
+                profiles = discovered.profiles;
+                hostProfiles = builtins.listToAttrs (
+                  map (
+                    hostRecord: lib.nameValuePair hostRecord.name hostPlans.${hostRecord.name}.profiles
                   ) discovered.hosts
                 );
                 homes = discoveredHomes;
@@ -1386,12 +1406,14 @@ let
       inherit inputs root;
       moduleRegistries = args.moduleRegistries or [ ];
       moduleGroups = args.moduleGroups or { };
+      profiles = args.profiles or { };
     }).mkFlake
       (
         builtins.removeAttrs args [
           "inputs"
           "moduleRegistries"
           "moduleGroups"
+          "profiles"
           "root"
         ]
       );

@@ -4,6 +4,10 @@
     "desktop"
     "development"
   ];
+  profiles = [
+    "workstation"
+    "personal"
+  ];
 
   home.useGlobalPkgs = false;
 }

@@ -19,6 +19,7 @@
       inherit (nixpkgs) lib;
       snowveil = import ./lib { inherit lib; };
       dependencyGraph = import ./lib/internal/depgraph.nix { inherit lib; };
+      profileTools = import ./lib/internal/profiles.nix { inherit lib; };
       frameworkInputs = {
         inherit self nixpkgs home-manager;
       };
@@ -480,6 +481,113 @@
           );
       };
 
+      profileSuccessChecks = {
+        listFormBothSides =
+          profileTools.readProfile {
+            name = "workstation";
+            value = [
+              "a"
+              "b"
+            ];
+            source = "测试夹具";
+          } == {
+            nixos = [
+              "a"
+              "b"
+            ];
+            home = [
+              "a"
+              "b"
+            ];
+          };
+        attrsetFormScoping =
+          profileTools.readProfile {
+            name = "workstation";
+            value = {
+              common = [ "a" ];
+              nixos = [ "b" ];
+            };
+            source = "测试夹具";
+          } == {
+            nixos = [
+              "a"
+              "b"
+            ];
+            home = [ "a" ];
+          };
+        knownMembersPass =
+          profileTools.checkMembers {
+            profile = "workstation";
+            source = "测试夹具";
+            side = "nixos";
+            members = [ "a" ];
+            knownNames = [
+              "a"
+              "b"
+            ];
+          } == [ "a" ];
+        knownHostProfilesPass =
+          profileTools.checkHostProfiles {
+            host = "testbox";
+            declared = [ "workstation" ];
+            knownProfiles.workstation = { };
+          } == [ "workstation" ];
+      };
+
+      profileFailureChecks = {
+        invalidShape = builtins.tryEval (
+          profileTools.readProfile {
+            name = "workstation";
+            value = 1;
+            source = "测试夹具";
+          }
+        );
+        emptyList = builtins.tryEval (
+          profileTools.readProfile {
+            name = "workstation";
+            value = [ ];
+            source = "测试夹具";
+          }
+        );
+        emptyAttrset = builtins.tryEval (
+          profileTools.readProfile {
+            name = "workstation";
+            value = { };
+            source = "测试夹具";
+          }
+        );
+        unknownField = builtins.tryEval (
+          profileTools.readProfile {
+            name = "workstation";
+            value.bogus = [ "a" ];
+            source = "测试夹具";
+          }
+        );
+        nonStringMember = builtins.tryEval (
+          profileTools.readProfile {
+            name = "workstation";
+            value = [ 1 ];
+            source = "测试夹具";
+          }
+        );
+        unknownMember = builtins.tryEval (
+          profileTools.checkMembers {
+            profile = "workstation";
+            source = "测试夹具";
+            side = "nixos";
+            members = [ "missing" ];
+            knownNames = [ "a" ];
+          }
+        );
+        unknownHostProfile = builtins.tryEval (
+          profileTools.checkHostProfiles {
+            host = "testbox";
+            declared = [ "missing" ];
+            knownProfiles.workstation = { };
+          }
+        );
+      };
+
       checksFor =
         sys:
         let
@@ -758,6 +866,50 @@
             ${pkgs.jq}/bin/jq -e '.hostFiles."hm-standalone" == ["default.nix"]' "$report" >/dev/null
             if [ -n "${exampleStandaloneHost.config.environment.variables.SNOWVEIL_HOST_HARDWARE or ""}" ]; then
               echo "hm-standalone 未声明 hardware.nix，fragment 却泄漏到了该主机" >&2
+              exit 1
+            fi
+            printf '%s\n' ok > "$out"
+          '';
+          profiles = pkgs.runCommand "snowveil-profiles" { nativeBuildInputs = [ pkgs.jq ]; } ''
+            test "${exampleHost.config.environment.variables.SNOWVEIL_PROFILE_PODMAN}" = "1"
+            test "${exampleHost.config.environment.variables.SNOWVEIL_PROFILE_GITCONFIG_NIXOS}" = "1"
+            test "${exampleHome.config.home.sessionVariables.SNOWVEIL_PROFILE_GITCONFIG}" = "1"
+            if [ -n "${
+              exampleStandaloneHost.config.environment.variables.SNOWVEIL_PROFILE_PODMAN or ""
+            }" ]; then
+              echo "modules 覆盖应禁用 profile 成员，但 workstation.podman 仍被加载" >&2
+              exit 1
+            fi
+            if [ -n "${
+              exampleStandaloneHost.config.environment.variables.SNOWVEIL_PROFILE_GITCONFIG_NIXOS or ""
+            }" ]; then
+              echo "hm-standalone 未声明 personal profile，workstation.gitconfig 却泄漏" >&2
+              exit 1
+            fi
+            if [ -n "${
+              exampleStandaloneHome.config.home.sessionVariables.SNOWVEIL_PROFILE_GITCONFIG or ""
+            }" ]; then
+              echo "hm-standalone 未声明 personal profile，home 侧模块却泄漏" >&2
+              exit 1
+            fi
+            report=${exampleDiscoveryReport}
+            ${pkgs.jq}/bin/jq -e '.discoverySpecVersion == "1.3"' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.profiles.workstation.nixos == ["workstation.podman"]' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.profiles.workstation.home == []' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.profiles.personal.nixos == ["workstation.gitconfig"] and .profiles.personal.home == ["workstation.gitconfig"]' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.hostProfiles."nixos-desktop" == ["workstation","personal"]' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.hostProfiles."hm-standalone" == ["workstation"]' "$report" >/dev/null
+            ${pkgs.jq}/bin/jq -e '.perHost."hm-standalone".nixos.disabledReasons."workstation.podman" == "被主机模块覆盖显式禁用"' "$report" >/dev/null
+            if [ "${
+              if lib.all (result: result) (builtins.attrValues profileSuccessChecks) then "yes" else "no"
+            }" != "yes" ]; then
+              echo "profile 正例未按预期解析" >&2
+              exit 1
+            fi
+            if [ "${
+              if lib.all (result: !result.success) (builtins.attrValues profileFailureChecks) then "yes" else "no"
+            }" != "yes" ]; then
+              echo "profile 负例未按预期失败" >&2
               exit 1
             fi
             printf '%s\n' ok > "$out"
