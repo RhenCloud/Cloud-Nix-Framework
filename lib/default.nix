@@ -606,6 +606,11 @@ let
             if builtins.hasAttr "disabled" outputs then outputs.disabled else flatOr "disabledOutputs" [ ];
           expectedOutputs =
             if builtins.hasAttr "expected" outputs then outputs.expected else flatOr "expectedOutputs" { };
+          homesStandalone =
+            if builtins.hasAttr "homes" outputs && builtins.hasAttr "standalone" outputs.homes then
+              outputs.homes.standalone
+            else
+              true;
           evalOutputs = outputs.eval or { };
           diagnosticsOutputs = outputs.diagnostics or { };
           packageSystems = lib.unique (systems ++ map (host: host.system) discovered.hosts);
@@ -862,7 +867,7 @@ let
                 ) discovered.homes
               );
             in
-            global // perHost;
+            if homesStandalone then global // perHost else perHost;
 
           images = lib.mapAttrs (
             host: cfg:

@@ -225,6 +225,12 @@
         };
       };
 
+      exampleFlakeHomesStandaloneDisabled = snowveil.mkFlake {
+        inputs = exampleInputs;
+        root = ./examples/basic;
+        outputs.homes.standalone = false;
+      };
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -912,6 +918,31 @@
               echo "profile 负例未按预期失败" >&2
               exit 1
             fi
+            printf '%s\n' ok > "$out"
+          '';
+          homesstandalone = pkgs.runCommand "snowveil-homes-standalone" { } ''
+            # Default: standalone homes enabled
+            test "${
+              if builtins.hasAttr "rhencloud" exampleFlake.homeConfigurations then "yes" else "no"
+            }" = "yes"
+            test "${
+              if builtins.hasAttr "rhencloud@nixos-desktop" exampleFlake.homeConfigurations then "yes" else "no"
+            }" = "yes"
+            # With standalone disabled: only per-host homes
+            test "${
+              if builtins.hasAttr "rhencloud" exampleFlakeHomesStandaloneDisabled.homeConfigurations then
+                "yes"
+              else
+                "no"
+            }" = "no"
+            test "${
+              if
+                builtins.hasAttr "rhencloud@nixos-desktop" exampleFlakeHomesStandaloneDisabled.homeConfigurations
+              then
+                "yes"
+              else
+                "no"
+            }" = "yes"
             printf '%s\n' ok > "$out"
           '';
           extensions = pkgs.runCommand "snowveil-extensions" { } ''
