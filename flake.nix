@@ -1073,12 +1073,12 @@
         options
         ;
       
-      # 框架契约：已知的 flake output schema
-      # 用于减少 Nix 工具的 "unknown flake output" 警告
-      # 定义了 Snowveil 元 flake 和生成的用户 flake 的所有标准 outputs
+      # Framework contract: known flake output schema
+      # Reduces "unknown flake output" warnings from Nix tools
+      # Defines all standard outputs for Snowveil meta flake and generated user flakes
       flakeOutputsSchema = schema.metaFlakeOutputs // {
-        # 注：用户 flake 还会产生以下额外 outputs（自动生成）
-        userFlakeOutputsNote = "用户 flake 还会包含: nixosConfigurations, homeConfigurations, packages, apps, nixosModules, homeModules, overlays, images, deploy";
+        # Note: user flakes will also produce these additional outputs (auto-generated)
+        userFlakeOutputsNote = "User flakes will also include: nixosConfigurations, homeConfigurations, packages, apps, nixosModules, homeModules, overlays, images, deploy";
       };
     };
 }
