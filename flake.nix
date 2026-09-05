@@ -25,6 +25,7 @@
         inherit self nixpkgs home-manager;
       };
       bound = snowveil.mkLib { inputs = frameworkInputs; };
+      flake-checks = import ./tests/flake-checks/profiles.nix { inherit lib profileTools; };
 
       templates = {
         default = {
@@ -1178,6 +1179,7 @@
       # Defines all standard outputs for Snowveil meta flake and generated user flakes
       flakeOutputsSchema = schema.metaFlakeOutputs // {
         # Note: user flakes will also produce these additional outputs (auto-generated)
+        flake-checks = import ./tests/flake-checks/profiles.nix { inherit lib profileTools; };
         userFlakeOutputsNote = "User flakes will also include: nixosConfigurations, homeConfigurations, packages, apps, nixosModules, homeModules, overlays, images, deploy";
       };
     };
