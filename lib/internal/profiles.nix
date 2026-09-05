@@ -6,7 +6,7 @@
 #
 # 定义形状与 moduleGroups 一致：
 #   - 字符串列表：成员在 NixOS 与 home 两侧同时生效
-#   - { common; nixos; home; }：分侧声明，nixos = common ++ nixos，home = common ++ home
+#   - { extends; common; nixos; home; }：可继承其他 profile，并分侧声明成员
 { lib }:
 
 let
@@ -45,12 +45,14 @@ let
         throw "profile '${name}' (${source}) must not be empty"
       else
         {
+          extends = [ ];
           nixos = members;
           home = members;
         }
     else if builtins.isAttrs value then
       let
         supportedFieldsSet = {
+          extends = true;
           common = true;
           nixos = true;
           home = true;
@@ -73,13 +75,19 @@ let
           inherit source;
           value = value.home or [ ];
         };
+        extends = readStringList {
+          field = "${name}.extends";
+          inherit source;
+          value = value.extends or [ ];
+        };
       in
       if unknownFields != [ ] then
         throw "profile '${name}' (${source}) contains unsupported fields: ${lib.concatStringsSep ", " unknownFields}"
-      else if common ++ nixos ++ home == [ ] then
+      else if extends ++ common ++ nixos ++ home == [ ] then
         throw "profile '${name}' (${source}) must not be empty"
       else
         {
+          inherit extends;
           nixos = lib.unique (common ++ nixos);
           home = lib.unique (common ++ home);
         }
@@ -87,8 +95,34 @@ let
       throw ''
         invalid profile definition
 
-        profile '${name}' (${source}) must be either a list of strings or an attrset with common/nixos/home fields
+        profile '${name}' (${source}) must be either a list of strings or an attrset with extends/common/nixos/home fields
       '';
+
+  resolveProfiles =
+    definitions:
+    let
+      names = builtins.attrNames definitions;
+      knownSet = lib.genAttrs names (_: true);
+      resolve =
+        trail: name:
+        let
+          definition = definitions.${name};
+          cycle = trail ++ [ name ];
+          unknown = lib.filter (parent: !builtins.hasAttr parent knownSet) definition.extends;
+          inherited = map (resolve cycle) definition.extends;
+        in
+        if builtins.elem name trail then
+          throw "profile inheritance cycle: ${lib.concatStringsSep " -> " cycle}"
+        else if unknown != [ ] then
+          throw "profile '${name}' (${definition.source}) extends unknown profile(s): ${lib.concatStringsSep ", " unknown}"
+        else
+          {
+            inherit (definition) source extends;
+            nixos = lib.unique (lib.concatMap (profile: profile.nixos) inherited ++ definition.nixos);
+            home = lib.unique (lib.concatMap (profile: profile.home) inherited ++ definition.home);
+          };
+    in
+    lib.genAttrs names (resolve [ ]);
 
   checkMembers =
     {
@@ -144,6 +178,7 @@ in
 {
   inherit
     readProfile
+    resolveProfiles
     checkMembers
     checkHostProfiles
     ;

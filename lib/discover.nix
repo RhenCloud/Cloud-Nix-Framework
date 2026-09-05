@@ -161,32 +161,36 @@ let
         inherit value;
       }) profiles;
 
-  profiles' = lib.mapAttrs (
+  normalizedProfiles = lib.mapAttrs (
     name: def:
-    let
-      normalized = profileTools.readProfile {
-        inherit name;
-        inherit (def) source value;
-      };
-    in
-    {
+    profileTools.readProfile {
+      inherit name;
+      inherit (def) source value;
+    }
+    // {
       inherit (def) source;
-      nixos = profileTools.checkMembers {
-        profile = name;
-        inherit (def) source;
-        side = "nixos";
-        members = normalized.nixos;
-        knownNames = builtins.attrNames moduleGraph.nixos.nodes;
-      };
-      home = profileTools.checkMembers {
-        profile = name;
-        inherit (def) source;
-        side = "home";
-        members = normalized.home;
-        knownNames = builtins.attrNames moduleGraph.home.nodes;
-      };
     }
   ) allProfileDefs;
+
+  resolvedProfiles = profileTools.resolveProfiles normalizedProfiles;
+
+  profiles' = lib.mapAttrs (name: profile: {
+    inherit (profile) source extends;
+    nixos = profileTools.checkMembers {
+      profile = name;
+      inherit (profile) source;
+      side = "nixos";
+      members = profile.nixos;
+      knownNames = builtins.attrNames moduleGraph.nixos.nodes;
+    };
+    home = profileTools.checkMembers {
+      profile = name;
+      inherit (profile) source;
+      side = "home";
+      members = profile.home;
+      knownNames = builtins.attrNames moduleGraph.home.nodes;
+    };
+  }) resolvedProfiles;
 
   registryModules =
     lib.foldl'

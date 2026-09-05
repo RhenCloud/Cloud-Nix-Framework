@@ -501,6 +501,7 @@
             ];
             source = "test fixture";
           } == {
+            extends = [ ];
             nixos = [
               "a"
               "b"
@@ -519,11 +520,45 @@
             };
             source = "test fixture";
           } == {
+            extends = [ ];
             nixos = [
               "a"
               "b"
             ];
             home = [ "a" ];
+          };
+        inheritance =
+          (profileTools.resolveProfiles {
+            base = {
+              source = "test fixture";
+              extends = [ ];
+              nixos = [ "a" ];
+              home = [ "a" ];
+            };
+            workstation = {
+              source = "test fixture";
+              extends = [ "base" ];
+              nixos = [ "b" ];
+              home = [ ];
+            };
+            desktop = {
+              source = "test fixture";
+              extends = [ "workstation" ];
+              nixos = [ "c" ];
+              home = [ "d" ];
+            };
+          }).desktop == {
+            source = "test fixture";
+            extends = [ "workstation" ];
+            nixos = [
+              "a"
+              "b"
+              "c"
+            ];
+            home = [
+              "a"
+              "d"
+            ];
           };
         knownMembersPass =
           profileTools.checkMembers {
@@ -595,6 +630,32 @@
             declared = [ "missing" ];
             knownProfiles.workstation = { };
           }
+        );
+        unknownParent = builtins.tryEval (
+          builtins.deepSeq (profileTools.resolveProfiles {
+            workstation = {
+              source = "test fixture";
+              extends = [ "missing" ];
+              nixos = [ ];
+              home = [ ];
+            };
+          }) true
+        );
+        inheritanceCycle = builtins.tryEval (
+          builtins.deepSeq (profileTools.resolveProfiles {
+            a = {
+              source = "test fixture";
+              extends = [ "b" ];
+              nixos = [ ];
+              home = [ ];
+            };
+            b = {
+              source = "test fixture";
+              extends = [ "a" ];
+              nixos = [ ];
+              home = [ ];
+            };
+          }) true
         );
       };
 

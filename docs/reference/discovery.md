@@ -134,6 +134,7 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 
 # profiles/personal.nix — 分侧形式（可选）
 {
+  extends = [ "base" ];            # 先继承其他 profile
   common = [ "base" ];           # 两侧都应用
   nixos = [ "nixos-only" ];      # 仅 NixOS 侧
   home = [ "hm-only" ];          # 仅 home-manager 侧
@@ -141,6 +142,8 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 ```
 
 - 纯列表自动扩展为 `{ common = list; }` 形式。
+- `extends` 按声明顺序递归展开父 profile，再追加当前 profile 成员；重复成员会被去除。
+- 支持多重与传递继承；未知父 profile 或继承循环会报错。
 - 空列表或空属性集视为错误（profile 必须声明至少一个成员）。
 - 成员名称必须存在于相应侧的模块图中；未知成员报错。
 - 文件 vs 参数冲突（同名 profile）：报错。

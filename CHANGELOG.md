@@ -8,6 +8,7 @@
 
 ### 新增
 
+- **Profile 继承**：属性集形式的 profile 可通过 `extends = [ ... ];` 组合其他 profile，支持多重与传递继承，并检测未知父项和继承循环。
 - **`outputs.homes.standalone` 选项**：控制是否生成独立 home-manager 配置（用户级别）。默认 true（向后兼容）；false 仅保留 user@host 配置，适合仅使用嵌入式 HM 的项目（减少 flake show 噪音、加速评估）。
 - **profile 系统**：命名的模块启用包，由主机通过 `meta.profiles = [...]` 声明。Profile 成员自动启用（除非被主机 `modules.<name> = false` 覆盖），且仍经过依赖冲突校验。语义不同于 `moduleGroups`（后者是模块侧 all-of 硬依赖声明，不自动启用成员）。Discovery 报告 v1.3：`profiles`（定义）和 `hostProfiles`（主机声明）字段。
 - 主机目录 magic 文件分拣：`hosts/<name>/` 除必需的 `default.nix`（主机意图）与元数据 `meta.nix` 外，可选识别 `hardware.nix` / `disk.nix` / `network.nix`，存在则按 `default.nix → hardware.nix → disk.nix → network.nix` 固定顺序自动 import，缺失即跳过；框架不内置 disko / nixos-hardware。非 magic 的 `.nix` 文件不会自动导入，仅输出 trace 警告。`snowveil-discovery` 报告新增 `hostFiles` 字段（discoverySpecVersion 1.2 → 1.3）。
