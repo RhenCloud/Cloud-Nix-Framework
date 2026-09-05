@@ -96,6 +96,24 @@ let
           ;
         sops = sops';
         inherit tests;
+        lint =
+          {
+            root ? projectRoot,
+          }:
+          let
+            pkgs = nixpkgs.legacyPackages.${builtins.currentSystem} or nixpkgs.legacyPackages.x86_64-linux;
+            tools = [
+              pkgs.treefmt
+              pkgs.nixfmt
+              pkgs.statix
+              pkgs.deadnix
+            ];
+            configFile = pkgs.writeText "treefmt.toml" (builtins.readFile (root + "/treefmt.toml"));
+          in
+          pkgs.writeShellScriptBin "snowveil-lint" ''
+            export PATH=${pkgs.lib.makeBinPath tools}:$PATH
+            exec ${pkgs.treefmt}/bin/treefmt --config-file ${configFile} --tree-root ${root} "$@"
+          '';
       };
       snowveil = snowveilInject;
 
