@@ -107,6 +107,7 @@ outputs.diagnostics = {
   moduleGraph = true;
   perHostModuleGraph = false;
   doctor = true;
+  expectedScaffold = true;
 };
 ```
 
@@ -114,6 +115,7 @@ outputs.diagnostics = {
 - `moduleGraph = false`：不生成 `snowveil-module-graph-dot`。
 - `perHostModuleGraph = false`：保留全局模块图，但省略 discovery 的 `perHost` 内容和 DOT 的 `hosts/` 子目录。
 - `doctor = false`：不生成 `snowveil-doctor`；该检查输出机器可读的 `report.json` 和便于阅读的 `report.txt`，错误会使检查失败，未被任何主机启用的模块仅记为警告。
+- `expectedScaffold = false`：不生成 `snowveil-expected-scaffold`；该文件按所有配置的 system 反向生成完整的 `outputs.expected` 精确模式配置，可直接复制到 `mkFlake` 参数中。
 
 ## 使用 mkSystem / mkHome 手动构造
 

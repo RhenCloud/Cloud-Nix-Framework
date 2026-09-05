@@ -1115,12 +1115,14 @@ let
                 "moduleGraph"
                 "perHostModuleGraph"
                 "doctor"
+                "expectedScaffold"
               ];
               supportedDiagnosticKeysSet = {
                 discovery = true;
                 moduleGraph = true;
                 perHostModuleGraph = true;
                 doctor = true;
+                expectedScaffold = true;
               };
               invalidDiagnosticKeys = lib.filter (
                 name: !builtins.hasAttr name supportedDiagnosticKeysSet
@@ -1130,6 +1132,7 @@ let
                 moduleGraph = checkedDiagnosticsOutputs.moduleGraph or true;
                 perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or false;
                 doctor = checkedDiagnosticsOutputs.doctor or true;
+                expectedScaffold = checkedDiagnosticsOutputs.expectedScaffold or true;
               };
               invalidDiagnosticValues = lib.filter (
                 name: !builtins.isBool diagnostics.${name}
@@ -1361,6 +1364,54 @@ let
                 ''}
               '';
 
+              renderNix =
+                value:
+                if builtins.isBool value then
+                  if value then "true" else "false"
+                else if builtins.isString value then
+                  builtins.toJSON value
+                else if builtins.isList value then
+                  "[ ${lib.concatMapStringsSep " " renderNix value} ]"
+                else if builtins.isAttrs value then
+                  "{\n${
+                    lib.concatMapStringsSep "" (name: "  ${builtins.toJSON name} = ${renderNix value.${name}};\n") (
+                      builtins.attrNames value
+                    )
+                  }}"
+                else
+                  throw "cannot render outputs.expected scaffold value of type ${builtins.typeOf value}";
+              expectedScaffold = {
+                mode = "exact";
+                hosts = discoveredHosts;
+                homes = discoveredHomes;
+                packages = lib.genAttrs systems (system: builtins.attrNames packages.${system});
+                apps = lib.genAttrs systems (
+                  system: if appsEnabled then builtins.attrNames apps.${system} else [ ]
+                );
+                checks = lib.genAttrs systems (system: builtins.attrNames discoveredChecks.${system});
+                devShells = lib.genAttrs systems (system: builtins.attrNames devShells.${system});
+                overlays = discoveredOverlays;
+                nixosModules = discoveredNixosModules;
+                homeModules = discoveredHomeModules;
+                formatter = builtins.attrNames formatter;
+                deploy = {
+                  present = deployEnabled;
+                  nodes =
+                    if deployEnabled && builtins.isAttrs deploy && builtins.isAttrs (deploy.nodes or null) then
+                      builtins.attrNames deploy.nodes
+                    else
+                      [ ];
+                };
+                images = builtins.listToAttrs (
+                  map (
+                    hostRecord: lib.nameValuePair hostRecord.name (hostRecord.meta.images.formats or [ ])
+                  ) discovered.hosts
+                );
+              };
+              expectedScaffoldCheck = pkgs.writeText "snowveil-expected-scaffold-${sys}.nix" ''
+                outputs.expected = ${renderNix expectedScaffold};
+              '';
+
               reservedCollision = lib.findFirst (name: lib.hasPrefix "snowveil-" name) null discoveredUserChecks;
             in
             if reservedCollision != null then
@@ -1383,6 +1434,9 @@ let
               }
               // lib.optionalAttrs diagnostics.doctor {
                 snowveil-doctor = doctorCheck;
+              }
+              // lib.optionalAttrs diagnostics.expectedScaffold {
+                snowveil-expected-scaffold = expectedScaffoldCheck;
               }
           );
 

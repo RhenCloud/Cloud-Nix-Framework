@@ -155,6 +155,7 @@
           moduleGraph = false;
           perHostModuleGraph = false;
           doctor = false;
+          expectedScaffold = false;
         };
       };
 
@@ -614,6 +615,7 @@
           exampleDiscoveryReport = exampleFlake.checks.${sys}.snowveil-discovery;
           exampleDotGraph = exampleFlake.checks.${sys}.snowveil-module-graph-dot;
           exampleDoctor = exampleFlake.checks.${sys}.snowveil-doctor;
+          exampleExpectedScaffold = exampleFlake.checks.${sys}.snowveil-expected-scaffold;
           validatedChecks = exampleFlakeValidated.checks.x86_64-linux;
           selectiveChecks = exampleFlakeSelective.checks.x86_64-linux;
           noDiagnosticChecks = exampleFlakeNoDiagnostics.checks.x86_64-linux;
@@ -978,6 +980,9 @@
             test -e ${exampleDoctor}/report.json
             test -e ${exampleDoctor}/report.txt
             ${pkgs.jq}/bin/jq -e '.schemaVersion == 1 and .ok == true' ${exampleDoctor}/report.json >/dev/null
+            grep -F 'outputs.expected = {' ${exampleExpectedScaffold} >/dev/null
+            grep -F '"mode" = "exact";' ${exampleExpectedScaffold} >/dev/null
+            grep -F '"x86_64-linux" = [' ${exampleExpectedScaffold} >/dev/null
             test ! -e ${cleanedSource}/docs
             test -e ${cleanedSource}/lib/default.nix
             printf '%s\n' ok > "$out"
@@ -992,6 +997,9 @@
               if builtins.hasAttr "snowveil-module-graph-dot" noDiagnosticChecks then "yes" else "no"
             }" = "no"
             test "${if builtins.hasAttr "snowveil-doctor" noDiagnosticChecks then "yes" else "no"}" = "no"
+            test "${
+              if builtins.hasAttr "snowveil-expected-scaffold" noDiagnosticChecks then "yes" else "no"
+            }" = "no"
             test "${
               if lib.all (result: !result.success) (builtins.attrValues invalidOutputChecks) then "yes" else "no"
             }" = "yes"
