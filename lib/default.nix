@@ -1188,7 +1188,7 @@ let
                     hostRecord: lib.nameValuePair hostRecord.name (map baseNameOf hostRecord.modulePaths)
                   ) discovered.hosts
                 );
-                profiles = discovered.profiles;
+                inherit (discovered) profiles;
                 hostProfiles = builtins.listToAttrs (
                   map (
                     hostRecord: lib.nameValuePair hostRecord.name hostPlans.${hostRecord.name}.profiles
