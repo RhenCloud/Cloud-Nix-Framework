@@ -1,6 +1,6 @@
 # Discovery 规范
 
-本文档定义 **Snowveil Discovery Specification v1.2** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
+本文档定义 **Snowveil Discovery Specification v1.3** —— 框架如何将目录树转译为 flake outputs 的完整规则集。规范以实现为准：`lib/discover.nix` 与 `lib/fs.nix` 是本规范的参考实现。
 
 ## 术语
 
@@ -118,6 +118,56 @@ hosts/<name>/meta.nix               →  （仅元数据，必须含 system，�
 10. mkFlake 的 nixos.modules / mkSystem 的 extraModules
 11. mkSystem 的 extraNixosModules
 ```
+---
+
+## profiles/ — Profile 定义
+
+### 发现规则
+
+扫描范围：`profiles/` 下的所有 `.nix` 文件（不递归），以及 `mkFlake { profiles = { ... }; }` 参数。
+
+每个 profile 的定义形式：
+
+```nix
+# profiles/workstation.nix — 纯列表形式（两侧同时应用）
+[ "a.b" "x.y" ]
+
+# profiles/personal.nix — 分侧形式（可选）
+{
+  common = [ "base" ];           # 两侧都应用
+  nixos = [ "nixos-only" ];      # 仅 NixOS 侧
+  home = [ "hm-only" ];          # 仅 home-manager 侧
+}
+```
+
+- 纯列表自动扩展为 `{ common = list; }` 形式。
+- 空列表或空属性集视为错误（profile 必须声明至少一个成员）。
+- 成员名称必须存在于相应侧的模块图中；未知成员报错。
+- 文件 vs 参数冲突（同名 profile）：报错。
+
+### Profile 语义
+
+**Host metadata 中的 profiles 声明**：
+
+```nix
+# hosts/mybox/meta.nix
+{
+  system = "x86_64-linux";
+  profiles = [ "workstation" "personal" ];
+}
+```
+
+- 每个声明的 profile 必须存在；未知 profile 报错。
+- 同一主机的多个 profile 成员按顺序合并。
+- Profile 成员自动启用，等价于主机级 `modules.<name> = true`。
+- 主机级 `modules.<name> = false` 仍可显式禁用 profile 成员（override 优先）。
+- Profile 成员仍经过依赖校验、冲突校验、拓扑排序等标准流程。
+
+**与 moduleGroups 的语义差异**：
+
+- `moduleGroups`：模块侧声明的 all-of 硬依赖，不自动启用成员（成员仍需被角色过滤或主机显式启用）。
+- `profiles`：主机侧声明的启用包，自动启用成员（除非被 `modules.<name> = false` 覆盖）。
+
 ---
 
 ## users/ — 系统用户（一等实体）
@@ -508,6 +558,6 @@ mkFlake 调用
 
 ## Discovery 报告契约
 
-`checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.2"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。`hostFiles` 为主机名到实际加载的主机目录 magic 文件列表（按加载顺序）的映射。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
+`checks.<system>.snowveil-discovery` 顶层包含 `schemaVersion = 1`、`discoverySpecVersion = "1.3"`、`frameworkVersion` 与 `system`。JSON schema major 只在破坏性结构变化时递增；规范版本独立演进。`hostFiles` 为主机名到实际加载的主机目录 magic 文件列表（按加载顺序）的映射。`profiles` 为 profile 定义映射，`hostProfiles` 为主机声明的 profile 名稱映射。用户 `checks/` 名称不得使用框架保留的 `snowveil-` 前缀。
 
 发现阶段同时维护 `hostsByName`、`usersByName`、`homesByUser`、`usersByHost` 与模块名索引，后续组合阶段不再重复扫描 users/homes 路径或按列表线性查找主机。`outputs.diagnostics.perHostModuleGraph = false` 时，报告中的 `perHost` 为 `{}`，DOT 输出也省略 `hosts/` 子目录。

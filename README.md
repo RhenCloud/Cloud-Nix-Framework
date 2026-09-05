@@ -50,11 +50,14 @@ nix flake init --template github:SnowveilOrg/Snowveil
 ├── flake.nix
 ├── hosts/
 │   └── nixos-desktop/
-│       ├── meta.nix                      # 角色与框架元数据（必须声明 system）
+│       ├── meta.nix                      # 角色、profile、框架元数据（必须声明 system）
 │       ├── default.nix                   # nixosConfigurations.nixos-desktop
 │       ├── hardware.nix                  # 可选：硬件配置，存在则自动 import
 │       ├── disk.nix                      # 可选：磁盘布局（disko / fileSystems）
 │       └── network.nix                   # 可选：网络配置，存在则自动 import
+├── profiles/
+│   ├── workstation.nix                   # Profile：命名的模块启用包
+│   └── personal.nix
 ├── users/
 │   └── rhencloud/
 │       ├── meta.nix                      # 声明 hosts、uid、组、密码等
