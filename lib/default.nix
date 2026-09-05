@@ -1114,11 +1114,13 @@ let
                 "discovery"
                 "moduleGraph"
                 "perHostModuleGraph"
+                "doctor"
               ];
               supportedDiagnosticKeysSet = {
                 discovery = true;
                 moduleGraph = true;
                 perHostModuleGraph = true;
+                doctor = true;
               };
               invalidDiagnosticKeys = lib.filter (
                 name: !builtins.hasAttr name supportedDiagnosticKeysSet
@@ -1127,6 +1129,7 @@ let
                 discovery = checkedDiagnosticsOutputs.discovery or true;
                 moduleGraph = checkedDiagnosticsOutputs.moduleGraph or true;
                 perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or false;
+                doctor = checkedDiagnosticsOutputs.doctor or true;
               };
               invalidDiagnosticValues = lib.filter (
                 name: !builtins.isBool diagnostics.${name}
@@ -1275,6 +1278,89 @@ let
                   ''
                 ) dotFiles}
               '';
+
+              doctorFindings =
+                let
+                  hasHomeManager = inputs ? home-manager;
+                  hostsWithHomes = lib.filter (host: (discovered.usersByHost.${host} or [ ]) != [ ]) (
+                    builtins.attrNames discovered.hostsByName
+                  );
+                  disabledUnusedByAny =
+                    let
+                      sideReport =
+                        side:
+                        let
+                          enabledUnion = lib.unique (
+                            lib.concatMap (host: hostPlans.${host}.${side}.order) (builtins.attrNames discovered.hostsByName)
+                          );
+                          allNames = builtins.attrNames discovered.moduleGraph.${side}.nodes;
+                        in
+                        lib.filter (name: !builtins.elem name enabledUnion) allNames;
+                    in
+                    {
+                      nixos = sideReport "nixos";
+                      home = sideReport "home";
+                    };
+                  findings =
+                    lib.optionals (!hasHomeManager && hostsWithHomes != [ ]) [
+                      {
+                        severity = "error";
+                        kind = "missing_home_manager_input";
+                        message = "hosts ${lib.concatStringsSep ", " hostsWithHomes} have associated homes but no home-manager input is wired; add home-manager to flake inputs";
+                      }
+                    ]
+                    ++
+                      lib.concatMap
+                        (
+                          side:
+                          map (name: {
+                            severity = "warning";
+                            kind = "unused_module";
+                            message = "${side} module '${name}' is defined but not enabled by any host";
+                          }) disabledUnusedByAny.${side}
+                        )
+                        [
+                          "nixos"
+                          "home"
+                        ];
+                in
+                {
+                  schemaVersion = 1;
+                  system = sys;
+                  frameworkVersion = version.string;
+                  ok = findings == [ ] || lib.all (finding: finding.severity != "error") findings;
+                  counts = {
+                    error = builtins.length (lib.filter (f: f.severity == "error") findings);
+                    warning = builtins.length (lib.filter (f: f.severity == "warning") findings);
+                  };
+                  findings = lib.sort (a: b: a.kind < b.kind || (a.kind == b.kind && a.message < b.message)) findings;
+                };
+              doctorReportJson = builtins.toJSON doctorFindings;
+              doctorReportText = pkgs.writeText "snowveil-doctor-${sys}.txt" (
+                if doctorFindings.findings == [ ] then
+                  "snowveil-doctor (${sys}): all clear\n"
+                else
+                  lib.concatStringsSep "\n" (
+                    [
+                      "snowveil-doctor (${sys})"
+                      "errors: ${toString doctorFindings.counts.error}, warnings: ${toString doctorFindings.counts.warning}"
+                      ""
+                    ]
+                    ++ map (f: "  [${f.severity}] ${f.kind}: ${f.message}") doctorFindings.findings
+                  )
+                  + "\n"
+              );
+              doctorCheck = pkgs.runCommand "snowveil-doctor-${sys}" { } ''
+                mkdir -p "$out"
+                cp ${pkgs.writeText "snowveil-doctor-${sys}.json" doctorReportJson} "$out/report.json"
+                cp ${doctorReportText} "$out/report.txt"
+                ${lib.optionalString (!doctorFindings.ok) ''
+                  cat "$out/report.txt" >&2
+                  echo "snowveil-doctor: ${toString doctorFindings.counts.error} error(s) detected" >&2
+                  exit 1
+                ''}
+              '';
+
               reservedCollision = lib.findFirst (name: lib.hasPrefix "snowveil-" name) null discoveredUserChecks;
             in
             if reservedCollision != null then
@@ -1294,6 +1380,9 @@ let
               }
               // lib.optionalAttrs diagnostics.moduleGraph {
                 snowveil-module-graph-dot = dotCheck;
+              }
+              // lib.optionalAttrs diagnostics.doctor {
+                snowveil-doctor = doctorCheck;
               }
           );
 

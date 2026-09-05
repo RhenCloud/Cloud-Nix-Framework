@@ -46,7 +46,8 @@ inputs.snowveil.lib.mkFlake {
     diagnostics = {
       discovery = true;
       moduleGraph = true;
-      perHostModuleGraph = true;
+      perHostModuleGraph = false;
+      doctor = true;
     };
   };
 
@@ -72,7 +73,7 @@ inputs.snowveil.lib.mkFlake {
 | `outputs.disabled` | `[string]` | `[]` | 禁用自动发现的 output |
 | `outputs.expected` | attrset | `{}` | 校验框架发现或生成的 output 集合，支持 `subset` / `exact` |
 | `outputs.eval` | attrset | `{ hosts = false; homes = false; }` | 按 bool 或目标名称列表启用 NixOS / Home Manager 轻量求值检查 |
-| `outputs.diagnostics` | attrset | 全部 `true` | 控制 discovery JSON、全局 DOT 和 per-host 模块图 |
+| `outputs.diagnostics` | attrset | `{ discovery = true; moduleGraph = true; perHostModuleGraph = false; doctor = true; }` | 控制 discovery JSON、模块图和 doctor 健康检查 |
 | `moduleRegistries` | `[registry]` | `[]` | 按需并入外部模块注册表 |
 | `moduleGroups` | attrset | `{}` | 注册供 `requiresGroups` 使用的显式 all-of 模块组 |
 

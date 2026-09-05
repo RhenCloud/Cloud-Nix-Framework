@@ -99,19 +99,21 @@ checks.<system>.snowveil-eval-homes
 
 ## 诊断输出控制
 
-默认生成 discovery JSON、全局 DOT 和 per-host DOT。只需要轻量 CI 时可关闭部分诊断：
+默认生成 discovery JSON、全局 DOT 和 doctor 健康检查，per-host DOT 默认关闭。只需要轻量 CI 时可关闭部分诊断：
 
 ```nix
 outputs.diagnostics = {
   discovery = false;
   moduleGraph = true;
   perHostModuleGraph = false;
+  doctor = true;
 };
 ```
 
 - `discovery = false`：不生成 `snowveil-discovery`。
 - `moduleGraph = false`：不生成 `snowveil-module-graph-dot`。
 - `perHostModuleGraph = false`：保留全局模块图，但省略 discovery 的 `perHost` 内容和 DOT 的 `hosts/` 子目录。
+- `doctor = false`：不生成 `snowveil-doctor`；该检查输出机器可读的 `report.json` 和便于阅读的 `report.txt`，错误会使检查失败，未被任何主机启用的模块仅记为警告。
 
 ## 使用 mkSystem / mkHome 手动构造
 
