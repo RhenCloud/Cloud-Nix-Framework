@@ -1420,7 +1420,6 @@ let
         projectSource
         ;
       sops = sops';
-      inherit sops';
     };
 
   mkLib = { inputs }: bind { inherit inputs; };
