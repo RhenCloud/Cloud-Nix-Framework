@@ -156,6 +156,7 @@
           perHostModuleGraph = false;
           doctor = false;
           expectedScaffold = false;
+          moduleCoverage = false;
         };
       };
 
@@ -616,6 +617,7 @@
           exampleDotGraph = exampleFlake.checks.${sys}.snowveil-module-graph-dot;
           exampleDoctor = exampleFlake.checks.${sys}.snowveil-doctor;
           exampleExpectedScaffold = exampleFlake.checks.${sys}.snowveil-expected-scaffold;
+          exampleModuleCoverage = exampleFlake.checks.${sys}.snowveil-module-coverage;
           validatedChecks = exampleFlakeValidated.checks.x86_64-linux;
           selectiveChecks = exampleFlakeSelective.checks.x86_64-linux;
           noDiagnosticChecks = exampleFlakeNoDiagnostics.checks.x86_64-linux;
@@ -985,6 +987,9 @@
             grep -F 'outputs.expected = {' ${exampleExpectedScaffold} >/dev/null
             grep -F '"mode" = "exact";' ${exampleExpectedScaffold} >/dev/null
             grep -F '"x86_64-linux" = [' ${exampleExpectedScaffold} >/dev/null
+            ${pkgs.jq}/bin/jq -e '.schemaVersion == 1 and .hostCount == 2' ${exampleModuleCoverage} >/dev/null
+            ${pkgs.jq}/bin/jq -e '.sides.nixos.hosts."nixos-desktop".percent >= 0' ${exampleModuleCoverage} >/dev/null
+            ${pkgs.jq}/bin/jq -e '.sides.home.modules | type == "object"' ${exampleModuleCoverage} >/dev/null
             test ! -e ${cleanedSource}/docs
             test -e ${cleanedSource}/lib/default.nix
             printf '%s\n' ok > "$out"
@@ -1001,6 +1006,9 @@
             test "${if builtins.hasAttr "snowveil-doctor" noDiagnosticChecks then "yes" else "no"}" = "no"
             test "${
               if builtins.hasAttr "snowveil-expected-scaffold" noDiagnosticChecks then "yes" else "no"
+            }" = "no"
+            test "${
+              if builtins.hasAttr "snowveil-module-coverage" noDiagnosticChecks then "yes" else "no"
             }" = "no"
             test "${
               if lib.all (result: !result.success) (builtins.attrValues invalidOutputChecks) then "yes" else "no"

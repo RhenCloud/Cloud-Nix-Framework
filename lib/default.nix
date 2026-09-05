@@ -1116,6 +1116,7 @@ let
                 "perHostModuleGraph"
                 "doctor"
                 "expectedScaffold"
+                "moduleCoverage"
               ];
               supportedDiagnosticKeysSet = {
                 discovery = true;
@@ -1123,6 +1124,7 @@ let
                 perHostModuleGraph = true;
                 doctor = true;
                 expectedScaffold = true;
+                moduleCoverage = true;
               };
               invalidDiagnosticKeys = lib.filter (
                 name: !builtins.hasAttr name supportedDiagnosticKeysSet
@@ -1133,6 +1135,7 @@ let
                 perHostModuleGraph = checkedDiagnosticsOutputs.perHostModuleGraph or false;
                 doctor = checkedDiagnosticsOutputs.doctor or true;
                 expectedScaffold = checkedDiagnosticsOutputs.expectedScaffold or true;
+                moduleCoverage = checkedDiagnosticsOutputs.moduleCoverage or true;
               };
               invalidDiagnosticValues = lib.filter (
                 name: !builtins.isBool diagnostics.${name}
@@ -1420,6 +1423,53 @@ let
                 outputs.expected = ${renderNix expectedScaffold};
               '';
 
+              coverageHosts = lib.filter (hostRecord: hostRecord.system == sys) discovered.hosts;
+              coverageForSide =
+                side:
+                let
+                  allModules = builtins.attrNames discovered.moduleGraph.${side}.nodes;
+                  total = builtins.length allModules;
+                  hosts = builtins.listToAttrs (
+                    map (
+                      hostRecord:
+                      let
+                        enabled = hostPlans.${hostRecord.name}.${side}.order;
+                        enabledCount = builtins.length enabled;
+                      in
+                      lib.nameValuePair hostRecord.name {
+                        inherit enabled total;
+                        disabled = lib.filter (name: !builtins.elem name enabled) allModules;
+                        percent = if total == 0 then 100 else builtins.div (enabledCount * 100) total;
+                      }
+                    ) coverageHosts
+                  );
+                in
+                {
+                  inherit total hosts;
+                  modules = lib.genAttrs allModules (
+                    name:
+                    let
+                      enabledBy = map (hostRecord: hostRecord.name) (
+                        lib.filter (hostRecord: builtins.elem name hostPlans.${hostRecord.name}.${side}.order) coverageHosts
+                      );
+                    in
+                    {
+                      inherit enabledBy;
+                      hostCount = builtins.length enabledBy;
+                    }
+                  );
+                };
+              moduleCoverageReport = {
+                schemaVersion = 1;
+                system = sys;
+                frameworkVersion = version.string;
+                hostCount = builtins.length coverageHosts;
+                sides = lib.genAttrs [ "nixos" "home" ] coverageForSide;
+              };
+              moduleCoverageCheck = pkgs.writeText "snowveil-module-coverage-${sys}.json" (
+                builtins.toJSON moduleCoverageReport
+              );
+
               reservedCollision = lib.findFirst (name: lib.hasPrefix "snowveil-" name) null discoveredUserChecks;
             in
             if reservedCollision != null then
@@ -1445,6 +1495,9 @@ let
               }
               // lib.optionalAttrs diagnostics.expectedScaffold {
                 snowveil-expected-scaffold = expectedScaffoldCheck;
+              }
+              // lib.optionalAttrs diagnostics.moduleCoverage {
+                snowveil-module-coverage = moduleCoverageCheck;
               }
           );
 
