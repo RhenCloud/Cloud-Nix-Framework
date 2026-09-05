@@ -40,6 +40,15 @@
         };
       };
       exampleBound = snowveil.mkLib { inputs = exampleInputs; };
+      exampleHostTest = exampleBound.tests.forHost {
+        host = "nixos-desktop";
+        testScript = "machine.succeed('true')";
+        modules = [
+          {
+            virtualisation.memorySize = 256;
+          }
+        ];
+      };
       exampleFlake = snowveil.mkFlake {
         inputs = exampleInputs;
         root = ./examples/basic;
@@ -1019,6 +1028,12 @@
             test "${if lib.isDerivation exampleFormatter then "yes" else "no"}" = "yes"
             test "${exampleDeploy.root}" = "${toString ./examples/basic}"
             printf '%s\n' "${exampleApp.program}" > "$out"
+          '';
+          testsForHost = pkgs.runCommand "snowveil-tests-for-host" { } ''
+            test ${lib.escapeShellArg exampleHostTest.name} = "vm-test-run-snowveil-nixos-desktop"
+            test ${lib.escapeShellArg exampleHostTest.nodes.machine.config.networking.hostName} = "nixos-desktop"
+            test ${toString exampleHostTest.nodes.machine.config.virtualisation.memorySize} = 256
+            touch $out
           '';
           moduleoutputs = pkgs.runCommand "snowveil-module-outputs" { } ''
             names="${builtins.concatStringsSep " " (builtins.attrNames exampleFlake.nixosModules)}"

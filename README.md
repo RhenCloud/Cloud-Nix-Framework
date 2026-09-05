@@ -125,6 +125,17 @@ nix flake init --template github:SnowveilOrg/Snowveil
 
 仅凭这一段，`hosts/`、`homes/`、`modules/`、`packages/`、`overlays/`、`apps/`、`formatter/`、`deploy/`、`lib/`、`shells/`、`checks/` 下的内容就会被自动解析成完整配置。
 
+可通过绑定后的 `snowveil.tests.forHost` 为已发现主机创建 NixOS VM 测试，测试节点会复用该主机的模块、profile、用户和 special args：
+
+```nix
+checks.x86_64-linux.boot = snowveil.tests.forHost {
+  host = "nixos-desktop";
+  testScript = ''
+    machine.wait_for_unit("multi-user.target")
+  '';
+};
+```
+
 ## 核心 API
 
 框架通过 flake 的 `lib` 输出暴露统一命名空间。用户 flake 中应从 `inputs.snowveil.lib` 调用，完整入口是 `inputs.snowveil.lib.mkFlake`。

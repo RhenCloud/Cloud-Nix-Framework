@@ -93,6 +93,7 @@ let
           projectSource
           ;
         sops = sops';
+        inherit tests;
       };
       snowveil = snowveilInject;
 
@@ -311,7 +312,7 @@ let
         in
         lib.genAttrs [ "nixos" "home" ] reportSide;
 
-      mkSystem =
+      systemPlanFor =
         {
           host,
           system ? null,
@@ -326,6 +327,7 @@ let
           embedHomeManager ? true,
           homeManagerUseGlobalPkgs ? true,
           _pkgs ? null,
+          _forTest ? false,
         }:
         let
           plan = hostPlans.${host};
@@ -424,8 +426,10 @@ let
           finalModules = [
             optionsSnowveil
             setSnowveilModule
-            (_: { nixpkgs = { inherit pkgs; }; })
           ]
+          ++ lib.optional (!_forTest) (_: {
+            nixpkgs = { inherit pkgs; };
+          })
           ++ lib.optionals (hostUserRecords != [ ]) [ userDefaultsModule ]
           ++ userDefaultModules
           ++ lib.optionals (embedForHost && hostHomeUsers != [ ]) [ embedModule ]
@@ -434,11 +438,53 @@ let
           ++ extraModules
           ++ extraNixosModules;
         in
-        nixosSystem {
-          system = sys;
-          inherit specialArgs;
-          modules = finalModules;
+        {
+          inherit
+            sys
+            pkgs
+            specialArgs
+            finalModules
+            ;
         };
+
+      mkSystem =
+        args:
+        let
+          plan = systemPlanFor args;
+        in
+        nixosSystem {
+          system = plan.sys;
+          inherit (plan) specialArgs;
+          modules = plan.finalModules;
+        };
+
+      tests = {
+        forHost =
+          {
+            host,
+            testScript,
+            name ? "snowveil-${host}",
+            nodeName ? "machine",
+            modules ? [ ],
+            extraSpecialArgs ? { },
+            testOptions ? { },
+          }:
+          let
+            plan = systemPlanFor {
+              inherit host extraSpecialArgs;
+              extraNixosModules = modules;
+              _forTest = true;
+            };
+          in
+          plan.pkgs.testers.runNixOSTest (
+            testOptions
+            // {
+              inherit name testScript;
+              node.specialArgs = plan.specialArgs;
+              nodes.${nodeName}.imports = plan.finalModules;
+            }
+          );
+      };
 
       mkHome =
         {
@@ -1551,6 +1597,7 @@ let
         mkHome
         forAllSystems
         version
+        tests
         ;
       inherit (fs) importModules flattenTree groupModules;
       inherit
