@@ -14,11 +14,28 @@ outputs.extra = {
 
 `outputs.extra` 通过 `lib.recursiveUpdate` 与框架生成的 outputs 合并，同名 key 由 `outputs.extra` 覆盖。`outputs.expected` 不检查 `outputs.extra`，只检查框架负责发现和生成的集合。
 
-## 非标准 outputs 警告
+## 非标准 outputs 与 Schema 声明
 
 `deploy`、`homeModules`、`images`、`options` 等属于生态约定或框架扩展。原生 `nix flake check` 可能输出 `unknown flake output`，这不等同于 derivation 或框架检查失败，框架库也无法拦截该原生警告。
 
+从 v0.5.0+ 开始，Snowveil 通过 **显式声明 `flakeOutputsSchema`** 来标记所有已知的 outputs，减少该噪音：
+
 ```bash
+# 生成的 flake 现在包含 flakeOutputsSchema output
+nix eval '.#flakeOutputsSchema'
+
+# 查看框架本身的 schema
+nix eval '.#flakeOutputsSchema'
+```
+
+框架在 `lib/schema.nix` 中定义了：
+- **元 flake** (snowveil 本身)：`lib`、`templates`、`checks`、`devShells`、`formatter`、`options`、`flakeOutputsSchema`
+- **用户 flake** (mkFlake 生成)：所有上述内容加上 `nixosConfigurations`、`homeConfigurations`、`packages`、`apps`、`nixosModules`、`homeModules`、`overlays`、`images`、`deploy`
+
+这是一个 **框架契约声明**，既为人类可读，也可被工具自动解析。这改进了用户体验，因为 Nix 工具现在能正确识别这些是有意的自定义输出，而不是拼写错误。
+
+```bash
+# 完整的检查（含诊断信息）
 nix flake check path:. --show-trace
 nix flake check path:. --all-systems --show-trace
 ```

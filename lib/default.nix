@@ -1359,26 +1359,48 @@ let
               }
           );
 
-          moduleOutput = paths: { imports = paths; };
-          generated = {
-            inherit
-              nixosConfigurations
-              homeConfigurations
-              packages
-              devShells
-              checks
-              overlays
-              images
-              ;
-            lib = userLib;
-            nixosModules = lib.mapAttrs (_: moduleOutput) discovered.localGroupedModules.nixos;
-            homeModules = lib.mapAttrs (_: moduleOutput) discovered.localGroupedModules.home;
-          }
-          // lib.optionalAttrs appsEnabled { inherit apps; }
-          // lib.optionalAttrs (discovered.formatter != null && formatter != { }) { inherit formatter; }
-          // lib.optionalAttrs deployEnabled { inherit deploy; };
-        in
-        lib.recursiveUpdate generated extraOutputs;
+           moduleOutput = paths: { imports = paths; };
+           
+           # 用户 flake 的 output schema 声明
+           userFlakeSchema = {
+             description = "Snowveil 框架生成的 flake output schema";
+             outputs = {
+               nixosConfigurations = "NixOS 主机配置";
+               homeConfigurations = "Home Manager 用户配置";
+               packages = "每系统的可构建包";
+               apps = "每系统的应用程序包装器";
+               devShells = "开发环境 shell";
+               overlays = "nixpkgs overlays";
+               checks = "测试和验证检查";
+               nixosModules = "可复用的 NixOS 模块";
+               homeModules = "可复用的 Home Manager 模块";
+               images = "系统镜像输出（NixOS ISO, VM 等）";
+               deploy = "deploy 配置";
+               formatter = "代码格式化工具";
+               lib = "用户定义的库函数";
+             };
+           };
+           
+           generated = {
+             inherit
+               nixosConfigurations
+               homeConfigurations
+               packages
+               devShells
+               checks
+               overlays
+               images
+               ;
+             lib = userLib;
+             nixosModules = lib.mapAttrs (_: moduleOutput) discovered.localGroupedModules.nixos;
+             homeModules = lib.mapAttrs (_: moduleOutput) discovered.localGroupedModules.home;
+             flakeOutputsSchema = userFlakeSchema;
+           }
+           // lib.optionalAttrs appsEnabled { inherit apps; }
+           // lib.optionalAttrs (discovered.formatter != null && formatter != { }) { inherit formatter; }
+           // lib.optionalAttrs deployEnabled { inherit deploy; };
+         in
+         lib.recursiveUpdate generated extraOutputs;
     in
     {
       inherit

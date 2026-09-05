@@ -18,6 +18,7 @@
     let
       inherit (nixpkgs) lib;
       snowveil = import ./lib { inherit lib; };
+      schema = import ./lib/schema.nix { inherit lib; };
       dependencyGraph = import ./lib/internal/depgraph.nix { inherit lib; };
       profileTools = import ./lib/internal/profiles.nix { inherit lib; };
       frameworkInputs = {
@@ -1057,6 +1058,7 @@
         in
         pkgs.writeText "snowveil-options.json" (builtins.toJSON (snowveil.renderOptions snowveilOpts))
       );
+
     in
     {
       lib = snowveil // {
@@ -1070,5 +1072,13 @@
         formatter
         options
         ;
+      
+      # 框架契约：已知的 flake output schema
+      # 用于减少 Nix 工具的 "unknown flake output" 警告
+      # 定义了 Snowveil 元 flake 和生成的用户 flake 的所有标准 outputs
+      flakeOutputsSchema = schema.metaFlakeOutputs // {
+        # 注：用户 flake 还会产生以下额外 outputs（自动生成）
+        userFlakeOutputsNote = "用户 flake 还会包含: nixosConfigurations, homeConfigurations, packages, apps, nixosModules, homeModules, overlays, images, deploy";
+      };
     };
 }
