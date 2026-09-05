@@ -1,5 +1,6 @@
 # 框架内置的 NixOS/HM 选项定义
-{ lib }:
+# 模块内部通过 { lib, ... } 拿到自己的 lib，此处不需要外层 lib。
+_:
 
 {
   optionsSnowveil =
@@ -14,12 +15,12 @@
           backupFileExtension = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            description = "嵌入式 home-manager 的 backupFileExtension；仅当该主机启用了 HM 嵌入时生效";
+            description = "backupFileExtension for the embedded home-manager module; only takes effect when HM embedding is enabled for this host.";
           };
           embed = lib.mkOption {
             type = lib.types.nullOr lib.types.bool;
             default = null;
-            description = "仅读取用；实际嵌入策略由 hosts/<host>/meta.nix 的 home.embed 字段或 mkFlake 的 embedHomeManager 参数控制";
+            description = "Read-only view of the current embed policy. The actual value is controlled by hosts/<host>/meta.nix (home.embed field) or mkFlake's embedHomeManager parameter.";
           };
         };
       };

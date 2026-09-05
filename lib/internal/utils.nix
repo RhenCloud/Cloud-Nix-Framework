@@ -30,9 +30,9 @@
         if isOpt o then
           leaf o
         else if builtins.isAttrs o then
-          lib.mapAttrs (k: go) o
+          lib.mapAttrs (_: go) o
         else
           o;
     in
-    lib.mapAttrs (k: go) opts;
+    lib.mapAttrs (_: go) opts;
 }

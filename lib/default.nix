@@ -17,6 +17,11 @@ let
   depGraph = import ./internal/depgraph.nix { inherit lib; };
   profileTools = import ./internal/profiles.nix { inherit lib; };
   userTools = import ./user.nix { inherit lib; };
+  utils = import ./internal/utils.nix { inherit lib; };
+  builtinOptions = import ./internal/options.nix { };
+
+  inherit (utils) renderOptions;
+  inherit (builtinOptions) optionsSnowveil optionsSnowveilHome;
 
   defaultSystems = [
     "x86_64-linux"
@@ -33,74 +38,6 @@ let
     pre = "dev";
     string = "0.5.0-dev";
   };
-
-  renderOptions =
-    opts:
-    let
-      isOpt =
-        o:
-        builtins.isAttrs o
-        && (
-          (o._type or "") == "option"
-          || (o ? type && builtins.isAttrs o.type && (o.type._type or "") == "option-type")
-        );
-      leaf = o: {
-        type =
-          let
-            t = o.type or null;
-          in
-          if t == null then null else t.name or t.description or "unknown";
-        description = o.description or null;
-        default =
-          let
-            d = builtins.tryEval (o.default or null);
-          in
-          if d.success then (builtins.tryEval (builtins.toJSON d.value)).value else null;
-      };
-      go =
-        o:
-        if isOpt o then
-          leaf o
-        else if builtins.isAttrs o then
-          lib.mapAttrs (k: go) o
-        else
-          o;
-    in
-    lib.mapAttrs (k: go) opts;
-
-  optionsSnowveil =
-    { lib, ... }:
-    {
-      options.snowveil = {
-        users = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [ ];
-        };
-        homeManager = {
-          backupFileExtension = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            description = "嵌入式 home-manager 的 backupFileExtension；仅当该主机启用了 HM 嵌入时生效";
-          };
-          embed = lib.mkOption {
-            type = lib.types.nullOr lib.types.bool;
-            default = null;
-            description = "仅读取用；实际嵌入策略由 hosts/<host>/meta.nix 的 home.embed 字段或 mkFlake 的 embedHomeManager 参数控制";
-          };
-        };
-      };
-    };
-
-  optionsSnowveilHome =
-    { lib, ... }:
-    {
-      options.snowveil = {
-        users = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [ ];
-        };
-      };
-    };
 
   bind =
     {
