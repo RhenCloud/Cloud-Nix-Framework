@@ -1268,19 +1268,27 @@ let
                   ]
               ) (builtins.attrNames perHostReport);
               dotFiles = globalDotFiles ++ hostDotFiles;
-              dotCheck = pkgs.runCommand "snowveil-module-graph-dot-${sys}" { } ''
-                mkdir -p "$out"
-                ${lib.concatMapStringsSep "\n" (
-                  file:
-                  let
-                    sourceFile = pkgs.writeText (baseNameOf file.path) file.text;
-                  in
+              dotCheck =
+                pkgs.runCommand "snowveil-module-graph-dot-${sys}" { nativeBuildInputs = [ pkgs.graphviz ]; }
                   ''
-                    mkdir -p "$out/${builtins.dirOf file.path}"
-                    cp ${sourceFile} "$out/${file.path}"
-                  ''
-                ) dotFiles}
-              '';
+                    export HOME="$TMPDIR"
+                    export XDG_CACHE_HOME="$TMPDIR/.cache"
+                    export FONTCONFIG_FILE=${pkgs.fontconfig.out}/etc/fonts/fonts.conf
+                    mkdir -p "$XDG_CACHE_HOME/fontconfig"
+                    mkdir -p "$out"
+                    ${lib.concatMapStringsSep "\n" (
+                      file:
+                      let
+                        sourceFile = pkgs.writeText (baseNameOf file.path) file.text;
+                        svgPath = lib.removeSuffix ".dot" file.path + ".svg";
+                      in
+                      ''
+                        mkdir -p "$out/${builtins.dirOf file.path}"
+                        cp ${sourceFile} "$out/${file.path}"
+                        dot -Tsvg ${sourceFile} > "$out/${svgPath}"
+                      ''
+                    ) dotFiles}
+                  '';
 
               doctorFindings =
                 let

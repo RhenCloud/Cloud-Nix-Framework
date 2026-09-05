@@ -976,7 +976,9 @@
             test -e ${validatedChecks.snowveil-eval-hosts}
             test -e ${validatedChecks.snowveil-eval-homes}
             test -e ${exampleDotGraph}/nixos.dot
+            test -e ${exampleDotGraph}/nixos.svg
             test -e ${exampleDotGraph}/hosts/nixos-desktop/home.dot
+            test -e ${exampleDotGraph}/hosts/nixos-desktop/home.svg
             test -e ${exampleDoctor}/report.json
             test -e ${exampleDoctor}/report.txt
             ${pkgs.jq}/bin/jq -e '.schemaVersion == 1 and .ok == true' ${exampleDoctor}/report.json >/dev/null

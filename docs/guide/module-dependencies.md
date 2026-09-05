@@ -109,9 +109,9 @@ nix build .#checks.x86_64-linux.snowveil-discovery
 jq '.moduleGraph, .perHost' result
 
 nix build .#checks.x86_64-linux.snowveil-module-graph-dot
-find result -name '*.dot' -print
+find result \( -name '*.dot' -o -name '*.svg' \) -print
 ```
 
-JSON 包含节点详情、组、能力 provider、边、全局顺序，以及逐主机的启用、禁用和能力满足原因。DOT derivation 输出全局 NixOS/HM 图和逐主机图，内容按字典序稳定生成。
+JSON 包含节点详情、组、能力 provider、边、全局顺序，以及逐主机的启用、禁用和能力满足原因。图 derivation 输出全局 NixOS/HM 图和逐主机图，每张图同时提供按字典序稳定生成的 DOT 源文件与 Graphviz SVG。
 
 未知模块或组、自引用、缺失硬依赖、缺失能力、冲突和循环都会以对应侧和目标为单位报告。

@@ -73,7 +73,7 @@ cat result
 
 `schemaVersion` 只在 JSON 结构发生破坏性变化时递增；`discoverySpecVersion` 独立表示目录发现规范。所有集合和图数据以稳定、可复现的顺序输出。
 
-DOT 图由 `checks.<system>.snowveil-module-graph-dot` 输出，包含全局图和 `hosts/<host>/<side>.dot`。
+模块图由 `checks.<system>.snowveil-module-graph-dot` 输出，包含全局图和 `hosts/<host>/<side>.{dot,svg}`。
 
 ## 命名冲突
 

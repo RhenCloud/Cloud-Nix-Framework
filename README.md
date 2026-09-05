@@ -189,7 +189,7 @@ inputs.snowveil.lib.mkFlake {
 - `outputs.disabled`：在求值文件前禁用指定 package、check、app、shell、formatter 或 deploy。
 - `outputs.expected`：校验框架生成的 output 集合，支持 `subset` / `exact` 及 hosts、homes、packages、apps、checks、devShells、overlays、modules、formatter、deploy、images。
 - `outputs.eval`：按需生成 NixOS / Home Manager 聚合求值检查；字段可为 bool 或目标名称列表，默认关闭。
-- `outputs.diagnostics`：控制 discovery JSON、DOT 模块图、per-host 模块图、`snowveil-doctor` 健康检查及 `outputs.expected` scaffold；per-host 图默认关闭，其余默认启用。
+- `outputs.diagnostics`：控制 discovery JSON、DOT/SVG 模块图、per-host 模块图、`snowveil-doctor` 健康检查及 `outputs.expected` scaffold；per-host 图默认关闭，其余默认启用。
 - `moduleRegistries`：按需并入外部模块注册表。
 - `moduleGroups`：注册 all-of 模块组，供模块 metadata 的 `requiresGroups` 使用。
 
@@ -598,7 +598,7 @@ home-manager switch --flake .#rhencloud@nixos-desktop
 nix flake check path:. --show-trace
 ```
 
-框架默认生成 `checks.<system>.snowveil-discovery` JSON 报告、`snowveil-module-graph-dot` 图输出、`snowveil-doctor` 健康检查和 `snowveil-expected-scaffold`。最后一项包含可直接粘贴的完整 `outputs.expected` 精确模式配置。可通过 `outputs.eval` 启用 `snowveil-eval-hosts` / `snowveil-eval-homes`，通过 `outputs.diagnostics` 关闭不需要的诊断。所有 `snowveil-*` check 名称由框架保留。
+框架默认生成 `checks.<system>.snowveil-discovery` JSON 报告、包含 DOT 与 SVG 的 `snowveil-module-graph-dot` 图输出、`snowveil-doctor` 健康检查和 `snowveil-expected-scaffold`。最后一项包含可直接粘贴的完整 `outputs.expected` 精确模式配置。可通过 `outputs.eval` 启用 `snowveil-eval-hosts` / `snowveil-eval-homes`，通过 `outputs.diagnostics` 关闭不需要的诊断。所有 `snowveil-*` check 名称由框架保留。
 
 `mkFlake` 在同一次调用内按 system 复用同一个 `pkgs`，并缓存发现索引、主机模块选择和依赖解析结果。测量无 eval cache 的性能时可运行：
 
