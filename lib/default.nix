@@ -491,21 +491,13 @@ let
         };
 
       mkFlake =
+        # 扁平参数（extraOutputs / extraSpecialArgs / extraModules /
+        # extraNixosModules / extraHomeModules / nixpkgsConfig / extraOverlays /
+        # embedHomeManager / homeManagerUseGlobalPkgs / disabledOutputs /
+        # expectedOutputs）仍受支持以保证向后兼容，通过 args_raw 读取。
+        # 嵌套命名空间（nixpkgs / nixos / home / outputs）优先。
         args_raw@{
           systems ? defaultSystems,
-          # --- 扁平参数（向后兼容，已弃用；请使用嵌套命名空间） ---
-          extraOutputs ? { },
-          extraSpecialArgs ? { },
-          extraModules ? [ ],
-          extraNixosModules ? [ ],
-          extraHomeModules ? [ ],
-          nixpkgsConfig ? { },
-          extraOverlays ? [ ],
-          embedHomeManager ? true,
-          homeManagerUseGlobalPkgs ? true,
-          disabledOutputs ? [ ],
-          expectedOutputs ? { },
-          # --- 嵌套命名空间（推荐） ---
           # nixpkgs = { config?; overlays?; }
           nixpkgs ? { },
           # nixos = { modules?; specialArgs?; }
